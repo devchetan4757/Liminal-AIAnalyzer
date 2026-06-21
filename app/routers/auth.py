@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 import os
-import jwt
 import datetime
+from jose import jwt, JWTError
 
 router = APIRouter()
 
