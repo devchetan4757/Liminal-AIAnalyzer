@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -34,15 +34,21 @@ app.mount(
     name="assets"
 )
 
-@app.get("/{full_path:path}")
-async def serve_frontend(full_path: str):
-    file_path = os.path.join("app/static/", full_path)
-
-    if full_path and os.path.exists(file_path):
-        return FileResponse(file_path)
-
-    return FileResponse("app/static/index.html")
+# =========================
+# FRONTEND SERVING
+# =========================
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "service": "malware-analysis-chatbot"}
+    return FileResponse("app/static/index.html")
+
+@app.head("/")
+async def root_head():
+    return Response(status_code=200)
+
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    file_path = os.path.join("app/static/", full_path)
+    if full_path and os.path.exists(file_path):
+        return FileResponse(file_path)
+    return FileResponse("app/static/index.html")
