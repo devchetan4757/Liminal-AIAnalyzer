@@ -19,6 +19,9 @@ python-multipart==0.0.32
 # 🔐 JWT AUTH FIX (IMPORTANT)
 python-jose[cryptography]==3.3.0
 
+# 🗄️ Database ORM
+SQLAlchemy==2.0.41
+
 setuptools==82.0.1
 sniffio==1.3.1
 starlette==1.3.1
