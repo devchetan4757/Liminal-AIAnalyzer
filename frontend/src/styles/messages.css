@@ -1,0 +1,551 @@
+/* ==========================================================
+   MESSAGE LIST
+========================================================== */
+.message-list {
+  flex: 1;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  display: flex;
+  flex-direction: column;
+  margin-top: 30px;
+  gap: 22px;
+
+  padding: 34px 40px;
+
+  scroll-behavior: smooth;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ==========================================================
+   EMPTY STATE
+========================================================== */
+
+.message-list--empty {
+  flex: 1;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message-list__empty {
+  max-width: 520px;
+  width: 100%;
+
+  margin: auto;
+
+  text-align: center;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+
+  gap: 16px;
+
+  color: var(--text-dim);
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+.message-list__empty-icon {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 22px;
+
+  background: rgba(99, 102, 241, 0.10);
+
+  border: 1px solid rgba(99, 102, 241, 0.18);
+
+  color: var(--accent);
+}
+
+.message-list__empty-title {
+  margin: 0;
+
+  color: var(--text);
+
+  font-size: 1.6rem;
+
+  font-weight: 800;
+
+  letter-spacing: -0.03em;
+  word-break: break-word;
+}
+
+.message-list__empty-text {
+  margin: 0;
+
+  max-width: 420px;
+
+  line-height: 1.7;
+
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+/* ==========================================================
+   MESSAGE ROW
+========================================================== */
+
+.message-row {
+  display: flex;
+
+  align-items: flex-end;
+
+  gap: 18px;
+
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+
+  animation: messageAppear 0.28s var(--ease) both;
+}
+
+.message-row--bot {
+  align-self: flex-start;
+}
+
+.message-row--user {
+  align-self: flex-end;
+
+  flex-direction: row-reverse;
+}
+
+/* ==========================================================
+   AVATARS
+========================================================== */
+
+.bot-avatar,
+.user-avatar {
+  width: 38px;
+  height: 38px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 14px;
+
+  border: 1px solid var(--border);
+
+  background: var(--panel-raised);
+}
+
+.bot-avatar {
+  color: var(--accent);
+}
+
+.user-avatar {
+  color: #22c55e;
+}
+
+/* ==========================================================
+   MESSAGE CONTENT WRAPPER
+========================================================== */
+
+.message-content {
+  display: flex;
+  flex-direction: column;
+
+  gap: 6px;
+
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+}
+
+/* ==========================================================
+   BUBBLES (CORE FIXED STYLE)
+========================================================== */
+
+.bubble {
+  max-width: 40ch;
+  width: fit-content;
+  max-width: min(40ch, 100%);
+
+  line-height: 1.65;
+
+  font-size: 0.95rem;
+
+  padding: 14px 18px;
+
+  border-radius: 16px;
+
+  word-break: break-word;
+
+  overflow-wrap: anywhere;
+  font-weight: bold;
+  box-sizing: border-box;
+}
+
+/* BOT */
+.bubble--bot {
+  background: var(--panel-raised);
+
+  border: 1px solid var(--border);
+
+  color: var(--text);
+  font-weight: bold;
+}
+
+/* USER */
+.bubble--user {
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+
+  color: #061b16;
+}
+
+/* FILE */
+.bubble--file {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+  font-style: italic;
+}
+
+/* ==========================================================
+   TEXT INSIDE BUBBLE (IMPORTANT FIX)
+========================================================== */
+
+.bubble p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* ==========================================================
+   MARKDOWN CLEANUP (NO DUPLICATE SPACING ISSUES)
+========================================================== */
+
+.bubble h1,
+.bubble h2,
+.bubble h3 {
+  margin: 10px 0 6px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.bubble ul,
+.bubble ol {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+
+.bubble li {
+  margin: 3px 0;
+  line-height: 1.5;
+}
+
+.bubble code {
+  font-family: var(--font-mono);
+  background: rgba(20,40,25,.06);
+  padding: 2px 5px;
+  border-radius: 6px;
+  font-size: .85em;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.bubble pre {
+  margin: 8px 0;
+  padding: 10px 12px;
+
+  background: #ECF7EF;
+
+  border: 1px solid var(--border);
+
+  border-radius: 12px;
+
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.bubble pre code {
+  background: none;
+  padding: 0;
+  white-space: pre;
+}
+
+.bubble img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+}
+
+.bubble table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+/* ==========================================================
+   SANDBOX PENDING SPINNER
+========================================================== */
+
+.bubble__spinner {
+  display: inline-block;
+
+  margin-right: 6px;
+
+  vertical-align: -2px;
+
+  color: var(--accent);
+
+  animation: spin 1.1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==========================================================
+   TYPING INDICATOR
+========================================================== */
+
+.typing-indicator {
+  display: flex;
+
+  align-items: center;
+
+  gap: 6px;
+
+  padding-left: 54px;
+  padding-bottom: 8px;
+}
+
+.typing-indicator span {
+  width: 7px;
+  height: 7px;
+
+  border-radius: 50%;
+
+  background: var(--text-faint);
+
+  animation: typingBounce 1.2s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* ==========================================================
+   ANIMATIONS
+========================================================== */
+
+@keyframes messageAppear {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes typingBounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+
+  30% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+/* ==========================================================
+   LARGE DESKTOP / WIDE SCREENS
+========================================================== */
+
+@media (min-width: 1440px) {
+  .message-list {
+    padding: 40px 64px;
+    gap: 28px;
+  }
+
+  .message-row {
+    max-width: 75%;
+  }
+
+  .bubble {
+    max-width: min(60ch, 38vw);
+  }
+}
+
+/* ==========================================================
+   DESKTOP
+========================================================== */
+
+@media (min-width: 900px) and (max-width: 1439px) {
+  .message-list {
+    padding: 36px 44px;
+    gap: 26px;
+  }
+
+  .message-row {
+    max-width: 82%;
+    gap: 20px;
+  }
+
+  .bot-avatar,
+  .user-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 15px;
+  }
+
+  .bubble {
+    max-width: min(40ch, 40vw);
+    font-size: 0.98rem;
+    padding: 16px 20px;
+    border-radius: 18px;
+  }
+
+  .message-list__empty-icon {
+    width: 80px;
+    height: 80px;
+  }
+
+  .message-list__empty-title {
+    font-size: 1.85rem;
+  }
+
+  .message-list__empty-text {
+    font-size: 1rem;
+  }
+}
+
+/* ==========================================================
+   TABLET
+========================================================== */
+
+@media (min-width: 481px) and (max-width: 899px) {
+  .message-list {
+    padding: 24px 28px;
+    gap: 20px;
+  }
+
+  .message-row {
+    max-width: 90%;
+    gap: 16px;
+  }
+
+  .bubble {
+    max-width: min(38ch, 70vw);
+    font-size: 0.94rem;
+    padding: 14px 16px;
+  }
+
+  .message-list__empty-icon {
+    width: 64px;
+    height: 64px;
+  }
+
+  .message-list__empty-title {
+    font-size: 1.4rem;
+  }
+}
+
+/* ==========================================================
+   MOBILE
+========================================================== */
+
+@media (max-width: 480px) {
+  .message-list {
+    padding: 14px;
+    gap: 16px;
+    margin-top: 16px;
+  }
+
+  .message-row {
+    max-width: 100%;
+    gap: 10px;
+    align-items: flex-end;
+  }
+
+  .bot-avatar,
+  .user-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+  }
+
+  .bubble {
+    max-width: min(40ch, 78vw);
+    font-size: 0.9rem;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .message-list__empty-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+  }
+
+  .message-list__empty-title {
+    font-size: 1.2rem;
+  }
+
+  .message-list__empty-text {
+    font-size: 0.88rem;
+  }
+
+  .typing-indicator {
+    padding-left: 40px;
+  }
+}
+
+/* ==========================================================
+   EXTRA SMALL / VERY NARROW SCREENS
+========================================================== */
+
+@media (max-width: 360px) {
+  .message-list {
+    padding: 10px;
+  }
+
+  .message-row {
+    gap: 8px;
+  }
+
+  .bot-avatar,
+  .user-avatar {
+    width: 26px;
+    height: 26px;
+  }
+
+  .bubble {
+    max-width: min(40ch, 82vw);
+    font-size: 0.86rem;
+    padding: 9px 10px;
+  }
+}

@@ -1,0 +1,200 @@
+/* Message input wrapper */
+.message-input {
+  box-sizing: border-box;
+  position: relative;
+  width: 100%;
+  padding: 18px 22px;
+  padding-bottom: max(18px, env(safe-area-inset-bottom));
+  background: transparent;
+  border-top: none;
+}
+
+/* Composer (main input bar) */
+.message-composer {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  transition:
+    border-color .2s var(--ease),
+    box-shadow .2s var(--ease),
+    transform .15s var(--ease);
+}
+
+.message-composer:focus-within {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 3px var(--accent-soft),
+    0 12px 35px rgba(0, 0, 0, 0.35);
+}
+
+/* Input field */
+.message-composer input {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.98rem;
+  font-weight: 500;
+  line-height: 1.6;
+  padding: 12px 14px;
+  caret-color: var(--accent);
+}
+
+.message-composer input::placeholder {
+  color: var(--text-faint);
+}
+
+.message-composer input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Send button */
+.send-button {
+  box-sizing: border-box;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 15px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: #fff;
+  cursor: pointer;
+  transition:
+    transform .15s var(--ease),
+    filter .2s var(--ease),
+    opacity .2s var(--ease);
+}
+
+.send-button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.send-button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.send-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* File / attach button */
+.icon-button {
+  box-sizing: border-box;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition:
+    background .2s var(--ease),
+    border-color .2s var(--ease),
+    color .2s var(--ease),
+    transform .15s var(--ease);
+}
+
+.icon-button:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.icon-button:active {
+  transform: scale(0.95);
+}
+
+/* Extra-small phones */
+@media (max-width: 380px) {
+  .message-input {
+    padding: 10px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  .message-composer {
+    gap: 6px;
+    padding: 8px;
+    border-radius: 14px;
+  }
+
+  .send-button,
+  .icon-button {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+  }
+
+  .message-composer input {
+    font-size: 0.88rem;
+    padding: 8px 6px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .message-input {
+    padding: 14px;
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+  }
+
+  .message-composer {
+    gap: 8px;
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  .send-button,
+  .icon-button {
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+  }
+
+  .message-composer input {
+    font-size: 0.93rem;
+    padding: 10px 8px;
+  }
+}
+
+/* Desktop */
+@media (min-width: 900px) {
+  .message-input {
+    padding: 22px 26px;
+  }
+
+  .message-composer {
+    padding: 14px;
+    border-radius: 20px;
+  }
+
+  .message-composer input {
+    font-size: 1rem;
+  }
+}
+
+/* Large desktop */
+@media (min-width: 1440px) {
+  .message-input {
+    max-width: 900px;
+    margin-inline: auto;
+  }
+}

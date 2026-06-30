@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  This file sits alongside your existing styles/index.css for now.
+  Once components are migrated to Tailwind utility classes + the ui/
+  primitives, the old per-component CSS files (variables.css, layout.css,
+  messages.css, etc.) can be retired one at a time.
+*/
+
+@layer base {
+  body {
+    @apply bg-bg text-text font-sans antialiased;
+  }
+
+  ::selection {
+    @apply bg-accent/30;
+  }
+}
