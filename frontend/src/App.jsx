@@ -1,16 +1,28 @@
+import { useState } from 'react'
 import ChatWindow from './components/ChatWindow'
 import ProtectedRoute from './components/ProtectedRoute'
-import { Button } from './components/ui/Button'
-import { Card } from './components/ui/Card'
-import { Badge } from './components/ui/Badge'
+import Sidebar from './components/Sidebar'
+import ManualAnalysisPage from './pages/ManualAnalysisPage'
+import HistoryPage from './pages/HistoryPage'
 
 export default function App() {
-  return (
-    <>
+  // Manual Analysis is the landing view -- Liminal (chat) is one section
+  // among others, not the default entry point.
+  const [section, setSection] = useState('manual')
 
-      <ProtectedRoute>
-        <ChatWindow />
-      </ProtectedRoute>
-    </>
+  return (
+    <ProtectedRoute>
+      <div className="flex h-screen w-full bg-bg">
+        <Sidebar active={section} onSelect={setSection} />
+
+        <div className="flex-1 overflow-hidden">
+          {section === 'manual' && (
+            <ManualAnalysisPage onAskLiminal={() => setSection('chat')} />
+          )}
+          {section === 'chat' && <ChatWindow />}
+          {section === 'history' && <HistoryPage />}
+        </div>
+      </div>
+    </ProtectedRoute>
   )
 }

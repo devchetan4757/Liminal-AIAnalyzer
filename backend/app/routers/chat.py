@@ -1,10 +1,14 @@
 import uuid
+
 from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
 from app.core import llm
 from app.core.aggregator import aggregate, quick_score
 from app.core.indicator import detect_indicator
 from app.core.deps import auth_guard
+from app.db.session import get_db
+from app.db.crud import save_analysis
 from app.models.schemas import ChatMessage
 
 router = APIRouter()
@@ -17,7 +21,8 @@ def get_username(user):
 @router.post("/message")
 async def handle_message(
     msg: ChatMessage,
-    user=Depends(auth_guard)
+    user=Depends(auth_guard),
+    db: Session = Depends(get_db)
 ):
     session_id = msg.session_id or str(uuid.uuid4())
 
@@ -58,7 +63,7 @@ async def handle_message(
         session_id=session_id
     )
 
-    return {
+    result = {
         "type": "analysis",
         "indicator": indicator,
         "indicator_type": indicator_type,
@@ -71,5 +76,11 @@ async def handle_message(
         "raw": raw,
         "found": True,
         "session_id": session_id,
+    }
+
+    save_analysis(db, result)
+
+    return {
+        **result,
         "user": get_username(user)
     }

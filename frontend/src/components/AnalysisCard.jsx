@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState } from 'react'
 import {
   ChevronDown,
   ChevronUp,
@@ -8,30 +8,16 @@ import {
   Lightbulb,
   Copy,
   Download,
-  Check
-} from "lucide-react";
-import VerdictBadge from "./VerdictBadge";
+  Check,
+} from 'lucide-react'
+import { Card, CardHeader } from './ui/Card'
+import { Badge } from './ui/Badge'
+import { Button } from './ui/Button'
+import VerdictBadge from './VerdictBadge'
 
 export default function AnalysisCard({ data }) {
-  const [showRaw, setShowRaw] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-const handleCopy = () => {
-  navigator.clipboard.writeText(indicator);
-  setCopied(true);
-  setTimeout(() => setCopied(false), 2000);
-};
-
-const handleExport = () => {
-  const blob = new Blob([JSON.stringify({ indicator, indicator_type, verdict, score, headline, findings, recommendation, sources, raw }, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `liminal-${indicator_type}-${indicator.slice(0, 16)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-};
-
+  const [showRaw, setShowRaw] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const {
     indicator,
@@ -43,135 +29,121 @@ const handleExport = () => {
     recommendation,
     sources,
     raw,
-  } = data;
+  } = data
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(indicator)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleExport = () => {
+    const blob = new Blob(
+      [JSON.stringify({ indicator, indicator_type, verdict, score, headline, findings, recommendation, sources, raw }, null, 2)],
+      { type: 'application/json' }
+    )
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `liminal-${indicator_type}-${indicator.slice(0, 16)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
-    <div className="analysis-card">
-
-      <div className="analysis-card__header">
-
+    <Card className="w-full max-w-md rounded-lg border-0">
+      <CardHeader>
         <VerdictBadge verdict={verdict} />
-
-        <div className="analysis-card__score">
-          <span className="analysis-card__score-label">
-            Confidence
-          </span>
-
-          <span className="analysis-card__score-value">
-            {score}
-          </span>
+        <div className="text-right">
+          <div className="text-[10px] uppercase tracking-wide text-text-faint">Confidence</div>
+          <div className="font-mono text-sm font-semibold text-text">{score}</div>
         </div>
+      </CardHeader>
 
-      </div>
-
-      <div className="analysis-card__section">
-
-        <div className="analysis-card__label">
-          <FileSearch size={15} />
-          Indicator
+      <Section icon={<FileSearch size={15} />} label="Indicator">
+        <div className="flex items-center justify-between gap-2">
+          <Badge tone="accent">{indicator_type}</Badge>
+          <div className="flex min-w-0 items-center gap-2">
+            <code className="truncate font-mono text-xs text-text-dim">{indicator}</code>
+            <button
+              onClick={handleCopy}
+              className="shrink-0 text-text-faint hover:text-accent"
+              title="Copy"
+            >
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+            </button>
+          </div>
         </div>
-
-        <div className="analysis-card__indicator">
-
-          <span className="analysis-card__type">
-            {indicator_type}
-          </span>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-  <code>{indicator}</code>
-  <button onClick={handleCopy} className="analysis-card__icon-btn" title="Copy">
-    {copied ? <Check size={14} /> : <Copy size={14} />}
-  </button>
-</div>
-
-        </div>
-
-      </div>
+      </Section>
 
       {headline && (
-        <div className="analysis-card__section">
-          <p className="analysis-card__headline">
-            {headline}
-          </p>
-        </div>
+        <Section>
+          <p className="text-sm text-text">{headline}</p>
+        </Section>
       )}
 
       {findings?.length > 0 && (
-        <div className="analysis-card__section">
-
-          <div className="analysis-card__label">
-            <CircleCheck size={15} />
-            Findings
-          </div>
-
-          <ul className="analysis-card__findings">
+        <Section icon={<CircleCheck size={15} />} label="Findings">
+          <ul className="list-disc space-y-1 pl-5 text-sm text-text-dim">
             {findings.map((finding, i) => (
               <li key={i}>{finding}</li>
             ))}
           </ul>
-
-        </div>
+        </Section>
       )}
 
       {recommendation && (
-        <div className="analysis-card__section analysis-card__recommendation">
-          <Lightbulb size={15} />
-          <p>{recommendation}</p>
-        </div>
+        <Section>
+          <div className="flex gap-2 rounded-md bg-warning-soft p-2.5 text-sm text-warning">
+            <Lightbulb size={15} className="mt-0.5 shrink-0" />
+            <p>{recommendation}</p>
+          </div>
+        </Section>
       )}
 
-      <div className="analysis-card__section">
-
-        <div className="analysis-card__label">
-          Sources
-        </div>
-
-        <div className="analysis-card__sources">
-
+      <Section label="Sources">
+        <div className="flex flex-wrap gap-1.5">
           {sources?.length ? (
             sources.map((source) => (
-              <span
-                key={source}
-                className="analysis-card__chip"
-              >
-                {source}
-              </span>
+              <Badge key={source} tone="neutral">{source}</Badge>
             ))
           ) : (
-            <span className="analysis-card__chip">
-              Unknown
-            </span>
+            <Badge tone="neutral">Unknown</Badge>
           )}
-
         </div>
+      </Section>
 
+      <div className="mt-3 flex gap-2">
+        <Button variant="secondary" size="sm" onClick={handleExport} className="flex-1">
+          <Download size={14} />
+          Export JSON
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setShowRaw((s) => !s)} className="flex-1">
+          <Database size={14} />
+          {showRaw ? 'Hide Raw' : 'View Raw'}
+          {showRaw ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </Button>
       </div>
 
-      <button className="analysis-card__toggle" onClick={handleExport}>
-  <Download size={15} />
-  Export JSON
-</button>
-      <button
-        className="analysis-card__toggle"
-        onClick={() => setShowRaw((s) => !s)}
-      >
-        <Database size={15} />
-
-        {showRaw ? "Hide Raw Data" : "View Raw Data"}
-
-        {showRaw ? (
-          <ChevronUp size={15} />
-        ) : (
-          <ChevronDown size={15} />
-        )}
-      </button>
-
       {showRaw && (
-        <pre className="analysis-card__raw">
+        <pre className="mt-3 max-h-64 overflow-auto rounded-md bg-bg-inset p-3 font-mono text-xs text-text-dim">
           {JSON.stringify(raw, null, 2)}
         </pre>
       )}
+    </Card>
+  )
+}
 
+function Section({ icon, label, children }) {
+  return (
+    <div className="mt-3 first:mt-0">
+      {label && (
+        <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-text-faint">
+          {icon}
+          {label}
+        </div>
+      )}
+      {children}
     </div>
-  );
+  )
 }

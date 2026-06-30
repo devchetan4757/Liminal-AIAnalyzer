@@ -1,36 +1,34 @@
-import { Bot, Trash2 } from "lucide-react";
+import { Bot, Trash2 } from 'lucide-react'
+import { Button } from './ui/Button'
 
 export default function Header({ onClearChat }) {
   return (
-    <header className="app-header">
-      <div className="app-header__left">
-        <div className="app-header__dot">
-          <Bot size={26} strokeWidth={2} />
+    <header className="flex items-center justify-between border-b border-border px-4 py-3 bg-bg-raised">
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent-soft text-accent">
+          <Bot size={22} strokeWidth={2} />
         </div>
 
-        <div className="app-header__titles">
-          <h1 className="app-header__brand">
+        <div>
+          <h1 className="text-sm font-semibold text-text leading-tight">
             Liminal
           </h1>
-
-          <p className="app-header__subtitle">
+          <p className="text-xs text-text-faint leading-tight">
             Your intelligent AI assistant
           </p>
         </div>
       </div>
 
-      <button
-        className="app-header__clear"
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={onClearChat}
         title="Clear conversation"
         aria-label="Clear conversation"
       >
-        <Trash2 size={18} />
-
-        <span className="app-header__clear-label">
-          Clear Chat
-        </span>
-      </button>
+        <Trash2 size={16} />
+        <span className="hidden sm:inline">Clear Chat</span>
+      </Button>
     </header>
-  );
+  )
 }

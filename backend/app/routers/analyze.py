@@ -2,12 +2,15 @@ import os
 import tempfile
 import uuid
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy.orm import Session
 
 from app.core import llm, memory
 from app.core.aggregator import aggregate, quick_score
 from app.core.indicator import sha256_of_file
-from app.models.schemas import HashLookupRequest
+from app.db.session import get_db
+from app.db.crud import save_analysis
+from app.models.schemas import HashLookupRequest, IndicatorLookupRequest
 from app.services import virustotal
 
 router = APIRouter()
@@ -17,15 +20,18 @@ router = APIRouter()
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
-async def _build_analysis(indicator: str, session_id: str = None):
-    raw, sources, found = await aggregate("hash", indicator)
+async def _build_analysis(indicator_type: str, indicator: str, session_id: str = None):
+    """Generalized to any indicator type. Previously hardcoded to "hash" --
+    the hash-specific callers below now just pass indicator_type="hash" explicitly.
+    """
+    raw, sources, found = await aggregate(indicator_type, indicator)
     if not found:
         return None
-    structured = llm.summarize_analysis("hash", indicator, raw, session_id=session_id)
+    structured = llm.summarize_analysis(indicator_type, indicator, raw, session_id=session_id)
     return {
         "type": "analysis",
         "indicator": indicator,
-        "indicator_type": "hash",
+        "indicator_type": indicator_type,
         "verdict": structured["verdict"],
         "score": quick_score(raw),
         "headline": structured["headline"],
@@ -38,12 +44,43 @@ async def _build_analysis(indicator: str, session_id: str = None):
     }
 
 
+@router.post("/indicator")
+async def analyze_indicator(req: IndicatorLookupRequest, db: Session = Depends(get_db)):
+    """Manual analysis entry point -- type is explicit, not auto-detected.
+    This is what the Manual Analysis page calls directly, independent of chat.
+    """
+    indicator_type = req.indicator_type.strip().lower()
+    if indicator_type not in {"hash", "url", "ip", "domain"}:
+        raise HTTPException(status_code=400, detail=f"Unsupported indicator_type: {indicator_type}")
+
+    session_id = req.session_id or str(uuid.uuid4())
+
+    try:
+        result = await _build_analysis(indicator_type, req.indicator.strip(), session_id=session_id)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Threat-intel lookup failed: {exc}")
+
+    if result is None:
+        return {
+            "type": "text",
+            "content": (
+                f"No threat-intel data found for this {indicator_type} across any "
+                "configured source. It may simply be unseen or benign."
+            ),
+            "found": False,
+            "session_id": session_id,
+        }
+
+    save_analysis(db, result)
+    return result
+
+
 @router.post("/hash")
-async def analyze_hash(req: HashLookupRequest):
+async def analyze_hash(req: HashLookupRequest, db: Session = Depends(get_db)):
     """Step 1: frontend computed the SHA256 client-side, no file left the browser yet."""
     session_id = req.session_id or str(uuid.uuid4())
     try:
-        result = await _build_analysis(req.hash, session_id=session_id)
+        result = await _build_analysis("hash", req.hash, session_id=session_id)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Threat-intel lookup failed: {exc}")
 
@@ -54,11 +91,17 @@ async def analyze_hash(req: HashLookupRequest):
             "found": False,
             "session_id": session_id,
         }
+
+    save_analysis(db, result)
     return result
 
 
 @router.post("/upload")
-async def analyze_upload(file: UploadFile = File(...), session_id: str = Form(default=None)):
+async def analyze_upload(
+    file: UploadFile = File(...),
+    session_id: str = Form(default=None),
+    db: Session = Depends(get_db),
+):
     """Step 2 (fallback): hash was unknown everywhere, user confirmed a real upload.
 
     Note: this endpoint hashes ANY file type -- malware doesn't announce itself via
@@ -90,7 +133,7 @@ async def analyze_upload(file: UploadFile = File(...), session_id: str = Form(de
             os.unlink(tmp_path)
 
     try:
-        result = await _build_analysis(file_hash, session_id=session_id)
+        result = await _build_analysis("hash", file_hash, session_id=session_id)
     except Exception as exc:
         # Previously an unhandled exception here (e.g. a timed-out/failed call to one
         # of the threat-intel services) would bubble up as a raw 500 and the frontend
@@ -102,6 +145,7 @@ async def analyze_upload(file: UploadFile = File(...), session_id: str = Form(de
         )
 
     if result is not None:
+        save_analysis(db, result)
         return result
 
     # Nothing in our threat-intel sources knows this hash. Submit the actual
@@ -150,7 +194,7 @@ async def analyze_upload(file: UploadFile = File(...), session_id: str = Form(de
 
 
 @router.get("/sandbox-status")
-async def sandbox_status(session_id: str):
+async def sandbox_status(session_id: str, db: Session = Depends(get_db)):
     """Poll this to check on a pending VT sandbox submission for this session."""
     job = memory.get_pending_sandbox_job(session_id)
     if not job:
@@ -183,7 +227,7 @@ async def sandbox_status(session_id: str):
     memory.clear_pending_sandbox_job(session_id)
 
     try:
-        result = await _build_analysis(job["file_hash"], session_id=session_id)
+        result = await _build_analysis("hash", job["file_hash"], session_id=session_id)
     except Exception as exc:
         raise HTTPException(
             status_code=502,
@@ -203,4 +247,5 @@ async def sandbox_status(session_id: str):
             "session_id": session_id,
         }
 
+    save_analysis(db, result)
     return result

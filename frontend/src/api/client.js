@@ -62,6 +62,19 @@ export async function analyzeHash({ hash, filename, size }) {
   }
 }
 
+export async function analyzeIndicator({ indicator_type, indicator }) {
+  try {
+    const { data } = await api.post('/analyze/indicator', {
+      indicator_type,
+      indicator,
+      session_id: getSessionId(),
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
 export async function analyzeUpload(file) {
   try {
     const form = new FormData()
@@ -83,6 +96,37 @@ export async function checkSandboxStatus() {
     const { data } = await api.get('/analyze/sandbox-status', {
       params: { session_id: getSessionId() },
     })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// --- History (Phase 3) ---------------------------------------------------
+
+export async function getHistory({ limit = 50, verdict, indicator_type } = {}) {
+  try {
+    const { data } = await api.get('/history', {
+      params: { limit, verdict, indicator_type },
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function getAnalysisById(id) {
+  try {
+    const { data } = await api.get(`/history/${id}`)
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function deleteAnalysis(id) {
+  try {
+    const { data } = await api.delete(`/history/${id}`)
     return data
   } catch (err) {
     throw new Error(extractErrorMessage(err))

@@ -14,6 +14,15 @@ class HashLookupRequest(BaseModel):
     session_id: Optional[str] = None
 
 
+class IndicatorLookupRequest(BaseModel):
+    """For the manual analysis page -- type is explicit (chosen via UI),
+    unlike chat where it's auto-detected from free text.
+    """
+    indicator_type: str  # "hash" | "url" | "ip" | "domain"
+    indicator: str
+    session_id: Optional[str] = None
+
+
 class AnalysisResult(BaseModel):
     type: str = "analysis"
     indicator: str

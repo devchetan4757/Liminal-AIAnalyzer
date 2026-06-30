@@ -8,7 +8,7 @@ export default function FileUpload({ onSelect }) {
     <>
       <button
         type="button"
-        className="icon-button"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-text-dim hover:bg-bg-inset hover:text-accent transition-colors"
         title="Attach file"
         onClick={() => inputRef.current?.click()}
       >

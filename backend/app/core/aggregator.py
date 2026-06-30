@@ -1,62 +1,26 @@
 import asyncio
 
-from app.services import abuseipdb, malwarebazaar, otx, threatfox, urlhaus, virustotal
+from app.core.plugins.registry import sources_for
 
 
 async def aggregate(indicator_type: str, indicator: str):
-    raw, sources = {}, []
+    sources_to_query = sources_for(indicator_type)
 
-    if indicator_type == "hash":
-        vt, mb, tf, otx_r = await asyncio.gather(
-            virustotal.lookup_hash(indicator),
-            malwarebazaar.lookup_hash(indicator),
-            threatfox.lookup_ioc(indicator),
-            otx.lookup("hash", indicator),
-        )
-        results = {"virustotal": vt, "malwarebazaar": mb, "threatfox": tf, "otx": otx_r}
-
-    elif indicator_type == "url":
-        vt, uh, otx_r = await asyncio.gather(
-            virustotal.lookup_url(indicator),
-            urlhaus.lookup_url(indicator),
-            otx.lookup("url", indicator),
-        )
-        results = {"virustotal": vt, "urlhaus": uh, "otx": otx_r}
-
-    elif indicator_type == "ip":
-        vt, ab, otx_r = await asyncio.gather(
-            virustotal.lookup_ip(indicator),
-            abuseipdb.lookup_ip(indicator),
-            otx.lookup("ip", indicator),
-        )
-        results = {"virustotal": vt, "abuseipdb": ab, "otx": otx_r}
-
-    elif indicator_type == "domain":
-        vt, uh, otx_r = await asyncio.gather(
-            virustotal.lookup_domain(indicator),
-            urlhaus.lookup_host(indicator),
-            otx.lookup("domain", indicator),
-        )
-        results = {"virustotal": vt, "urlhaus": uh, "otx": otx_r}
-
-    else:
+    if not sources_to_query:
         return {}, [], False
 
-    label_map = {
-        "virustotal": "VirusTotal",
-        "malwarebazaar": "MalwareBazaar",
-        "threatfox": "ThreatFox",
-        "otx": "AlienVault OTX",
-        "urlhaus": "URLhaus",
-        "abuseipdb": "AbuseIPDB",
-    }
+    results = await asyncio.gather(
+        *(source.lookup(indicator_type, indicator) for source in sources_to_query)
+    )
 
-    for key, value in results.items():
+    raw, sources = {}, []
+
+    for source, value in zip(sources_to_query, results):
         if value is None:
             continue  # not configured (missing API key), skip silently
-        raw[key] = value
+        raw[source.key] = value
         if not (isinstance(value, dict) and value.get("error")):
-            sources.append(label_map[key])
+            sources.append(source.label)
 
     found = any(
         v and not (isinstance(v, dict) and v.get("error")) for v in raw.values()
@@ -66,7 +30,12 @@ async def aggregate(indicator_type: str, indicator: str):
 
 def quick_score(raw: dict) -> str:
     """Best-effort human-friendly confidence score, trying multiple sources
-    in order since not every source will have data for every indicator."""
+    in order since not every source will have data for every indicator.
+
+    Unchanged from before -- still keys off the same source names
+    (virustotal, abuseipdb, threatfox, malwarebazaar, urlhaus, otx),
+    which the plugin adapters in builtin.py preserve exactly.
+    """
 
     # 1. VirusTotal detection ratio (most informative when available)
     vt = raw.get("virustotal") or {}
