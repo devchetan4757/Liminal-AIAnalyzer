@@ -1,0 +1,150 @@
+import { useEffect, useState } from 'react'
+import { RefreshCw, ShieldAlert, FileWarning, KeyRound, Package, FolderOpen } from 'lucide-react'
+import { getGithubSecurity } from '../api/client'
+import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { EnvPushes, SecretAlerts, DepAlerts, ExposedRepos } from '../components/github/SecurityTabs'
+import { Repositories } from '../components/github/RepoCard'
+
+const TABS = [
+  { key: 'env',     label: '.env Incidents',  statKey: 'env_push_count' },
+  { key: 'secrets', label: 'Secret Leaks',    statKey: 'secret_alert_count' },
+  { key: 'deps',    label: 'Vulnerabilities', statKey: 'dep_alert_count' },
+  { key: 'exposed', label: 'Exposed Repos',   statKey: 'exposed_repo_count' },
+  { key: 'repos',   label: 'Repositories',    statKey: 'total_repos' },
+]
+
+function StatCard({ label, value, tone = 'neutral', icon: Icon }) {
+  const colours = {
+    neutral: 'text-text-dim',
+    warning: 'text-warning',
+    danger:  'text-danger',
+    success: 'text-success',
+  }
+  return (
+    <Card className="flex flex-col gap-1 min-w-[120px]">
+      <div className={`flex items-center gap-1.5 text-xs font-medium ${colours[tone]}`}>
+        <Icon size={14} /> {label}
+      </div>
+      <div className="font-mono text-2xl font-bold text-text">{value}</div>
+    </Card>
+  )
+}
+
+export default function GitHubDashboard({ integration }) {
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState('')
+  const [tab, setTab]         = useState('env')
+
+  const load = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await getGithubSecurity(integration.id)
+      setData(result)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [integration.id])
+
+  if (loading) return (
+    <div className="flex h-full flex-col gap-4 p-6">
+      <div className="flex gap-3">
+        {[1,2,3,4].map(i => (
+          <div key={i} className="h-20 w-32 animate-pulse rounded-lg bg-bg-inset" />
+        ))}
+      </div>
+      <div className="flex flex-col gap-2 mt-4">
+        {[1,2,3].map(i => (
+          <div key={i} className="h-16 animate-pulse rounded-lg bg-bg-inset" />
+        ))}
+      </div>
+    </div>
+  )
+
+  if (error) return (
+    <div className="p-6">
+      <Card className="border-danger/40 bg-danger-soft/20">
+        <p className="text-sm text-danger font-medium mb-1">Scan failed</p>
+        <p className="text-sm text-text-dim">{error}</p>
+        <Button variant="secondary" size="sm" className="mt-3" onClick={load}>
+          Retry
+        </Button>
+      </Card>
+    </div>
+  )
+
+  const s = data.stats
+
+  return (
+    <div className="flex h-full flex-col overflow-y-auto">
+
+      {/* header */}
+      <div className="flex items-center justify-between border-b border-border px-6 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-bg-inset">
+            <ShieldAlert size={18} className="text-accent" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-text">{integration.display_name}</div>
+            <div className="text-[11px] text-text-faint">GitHub · Security Dashboard</div>
+          </div>
+        </div>
+        <Button variant="secondary" size="sm" onClick={load} disabled={loading}>
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Scan now
+        </Button>
+      </div>
+
+      {/* stats row */}
+      <div className="flex flex-wrap gap-3 border-b border-border px-6 py-4">
+        <StatCard label="Repositories" value={s.total_repos}        tone="neutral" icon={FolderOpen} />
+        <StatCard label=".env Pushes"  value={s.env_push_count}     tone={s.env_push_count     ? 'warning' : 'success'} icon={FileWarning} />
+        <StatCard label="Secret Leaks" value={s.secret_alert_count} tone={s.secret_alert_count ? 'danger'  : 'success'} icon={KeyRound} />
+        <StatCard label="Vuln Deps"    value={s.dep_alert_count}    tone={s.dep_alert_count    ? 'warning' : 'success'} icon={Package} />
+      </div>
+
+      {/* tabs */}
+      <div className="flex border-b border-border px-6">
+        {TABS.map(t => {
+          const count = data.stats[t.statKey]
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex items-center gap-1.5 border-b-2 px-4 py-3 text-xs font-medium transition-colors ${
+                tab === t.key
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-text-faint hover:text-text'
+              }`}
+            >
+              {t.label}
+              {count > 0 && (
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                  tab === t.key ? 'bg-accent-soft text-accent' : 'bg-bg-inset text-text-dim'
+                }`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* tab content */}
+      <div className="flex-1 overflow-y-auto px-6 py-4">
+        {tab === 'env'     && <EnvPushes    items={data.env_pushes}                        />}
+        {tab === 'secrets' && <SecretAlerts items={data.secret_alerts}                     />}
+        {tab === 'deps'    && <DepAlerts    items={data.dep_alerts}                        />}
+        {tab === 'exposed' && <ExposedRepos items={data.exposed_repos}                     />}
+        {tab === 'repos'   && <Repositories repos={data.repos} integrationId={integration.id} />}
+      </div>
+
+    </div>
+  )
+}

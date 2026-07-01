@@ -132,3 +132,88 @@ export async function deleteAnalysis(id) {
     throw new Error(extractErrorMessage(err))
   }
 }
+
+// --- Connected Apps -------------------------------------------------------
+
+export async function getIntegrations() {
+  try {
+    const { data } = await api.get("/integrations/");
+    return data;
+  } catch (err) {
+    throw new Error(extractErrorMessage(err));
+  }
+}
+
+export async function createIntegration(payload) {
+  try {
+    const { data } = await api.post("/integrations/", payload);
+    return data;
+  } catch (err) {
+    throw new Error(extractErrorMessage(err));
+  }
+}
+
+export async function validateIntegration(id) {
+  try {
+    const { data } = await api.post(`/integrations/${id}/validate`);
+    return data;
+  } catch (err) {
+    throw new Error(extractErrorMessage(err));
+  }
+}
+
+export async function syncIntegration(id) {
+  try {
+    const { data } = await api.post(`/integrations/${id}/sync`);
+    return data;
+  } catch (err) {
+    throw new Error(extractErrorMessage(err));
+  }
+}
+
+export async function deleteIntegration(id) {
+  try {
+    const { data } = await api.delete(`/integrations/${id}`);
+    return data;
+  } catch (err) {
+    throw new Error(extractErrorMessage(err));
+  }
+}
+
+// --- GitHub Security ------------------------------------------------------
+
+export async function getGithubSecurity(integrationId) {
+  try {
+    const { data } = await api.get(`/integrations/${integrationId}/github/security`, {
+      timeout: 120000,
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function getRepoPeek(integrationId, repoFullName) {
+  try {
+    const { data } = await api.get(`/integrations/${integrationId}/github/repo-peek`, {
+      params: { repo: repoFullName },
+      timeout: 35000,
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// --- MongoDB Atlas ---------------------------------------------------------
+
+export async function getMongoLogs(integrationId) {
+  try {
+    const { data } = await api.get(`/integrations/${integrationId}/mongodb/logs`, {
+      timeout: 35000,
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}

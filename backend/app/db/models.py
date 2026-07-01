@@ -1,7 +1,15 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, String, Float, DateTime, JSON, Text, ForeignKey
+from sqlalchemy import (
+    Column,
+    String,
+    Boolean,
+    DateTime,
+    JSON,
+    Text,
+    ForeignKey,
+)
 from sqlalchemy.orm import relationship
 
 from app.db.session import Base
@@ -15,47 +23,182 @@ def _now():
     return datetime.now(timezone.utc)
 
 
-class Analysis(Base):
-    """One row per indicator lookup -- this is the history/audit trail.
+# ==========================================================
+# Existing Models
+# ==========================================================
 
-    Written every time analyze.py or chat.py produces an "analysis" result.
-    This table alone unlocks: a history view, the dashboard, and "have I
-    seen this indicator before" checks -- before cases/watchlists exist.
-    """
+class Analysis(Base):
     __tablename__ = "analyses"
 
     id = Column(String, primary_key=True, default=_uuid)
     created_at = Column(DateTime, default=_now, index=True)
 
     indicator = Column(String, index=True, nullable=False)
-    indicator_type = Column(String, index=True, nullable=False)  # hash / url / ip / domain
-    verdict = Column(String, index=True, nullable=False)         # malicious / suspicious / clean / unknown
+    indicator_type = Column(String, index=True, nullable=False)
+    verdict = Column(String, index=True, nullable=False)
     score = Column(String, nullable=True)
 
     headline = Column(Text, nullable=True)
     recommendation = Column(Text, nullable=True)
-    findings = Column(JSON, nullable=True)   # list[str]
-    sources = Column(JSON, nullable=True)    # list[str]
-    raw = Column(JSON, nullable=True)        # full raw payload from aggregator
+    findings = Column(JSON, nullable=True)
+    sources = Column(JSON, nullable=True)
+    raw = Column(JSON, nullable=True)
 
     session_id = Column(String, index=True, nullable=True)
 
-    # nullable for now -- wire to a real Case model in the next phase
     case_id = Column(String, ForeignKey("cases.id"), nullable=True)
     case = relationship("Case", back_populates="analyses")
 
 
 class Case(Base):
-    """Stub for the next phase (case management). Created now so Analysis
-    can reference it without a schema migration later.
-    """
     __tablename__ = "cases"
 
     id = Column(String, primary_key=True, default=_uuid)
     created_at = Column(DateTime, default=_now)
+
     title = Column(String, nullable=False)
-    status = Column(String, default="open")  # open / investigating / contained / closed
+    status = Column(String, default="open")
     severity = Column(String, default="unknown")
     notes = Column(Text, nullable=True)
 
     analyses = relationship("Analysis", back_populates="case")
+
+
+# ==========================================================
+# Integrations
+# ==========================================================
+
+class Integration(Base):
+    __tablename__ = "integrations"
+
+    id = Column(String, primary_key=True, default=_uuid)
+
+    provider = Column(String, nullable=False, index=True)
+
+    display_name = Column(String, nullable=False)
+
+    account_identifier = Column(String)
+
+    authentication_type = Column(String, nullable=False)
+
+    encrypted_credentials = Column(JSON, nullable=False)
+
+    status = Column(String, default="connected")
+
+    auto_sync = Column(Boolean, default=True)
+
+    last_sync = Column(DateTime)
+    cached_scan = Column(JSON)
+
+    cached_scan_at = Column(DateTime)
+
+    created_at = Column(DateTime, default=_now)
+
+    updated_at = Column(DateTime, default=_now)
+
+    events = relationship(
+        "Event",
+        back_populates="integration",
+        cascade="all, delete",
+    )
+    resources = relationship(
+    "Resource",
+    backref="integration",
+    cascade="all, delete",
+    )
+
+
+# ==========================================================
+# Events
+# ==========================================================
+
+class Event(Base):
+    __tablename__ = "events"
+
+    id = Column(String, primary_key=True, default=_uuid)
+
+    integration_id = Column(
+        String,
+        ForeignKey("integrations.id"),
+        nullable=False,
+    )
+
+    resource_type = Column(String, nullable=False)
+
+    resource_id = Column(String, nullable=False)
+
+    event_type = Column(String, nullable=False)
+
+    severity = Column(String, default="info")
+
+    title = Column(String, nullable=False)
+
+    description = Column(Text)
+
+    event_metadata = Column(JSON)
+
+    provider_timestamp = Column(DateTime)
+
+    created_at = Column(DateTime, default=_now)
+
+    integration = relationship(
+        "Integration",
+        back_populates="events",
+    )
+
+
+# ==========================================================
+# Incidents
+# ==========================================================
+
+class Incident(Base):
+    __tablename__ = "incidents"
+
+    id = Column(String, primary_key=True, default=_uuid)
+
+    title = Column(String, nullable=False)
+
+    severity = Column(String, default="medium")
+
+    status = Column(String, default="open")
+
+    summary = Column(Text)
+
+    root_cause = Column(Text)
+
+    recommendations = Column(JSON)
+
+    incident_metadata = Column(JSON)
+
+    created_at = Column(DateTime, default=_now)
+
+    updated_at = Column(DateTime, default=_now)
+
+class Resource(Base):
+    __tablename__ = "resources"
+
+    id = Column(String, primary_key=True, default=_uuid)
+
+    integration_id = Column(
+        String,
+        ForeignKey("integrations.id"),
+        nullable=True,
+    )
+
+    provider = Column(String, nullable=False)
+
+    resource_type = Column(String, nullable=False)
+
+    external_id = Column(String)
+
+    name = Column(String, nullable=False)
+
+    display_name = Column(String)
+
+    status = Column(String, default="active")
+
+    metadata_json = Column(JSON)
+
+    created_at = Column(DateTime, default=_now)
+
+    updated_at = Column(DateTime, default=_now)

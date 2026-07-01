@@ -16,6 +16,10 @@ pydantic_core==2.46.4
 python-dotenv==1.2.2
 python-multipart==0.0.32
 
+PyGithub
+boto3
+cryptography
+requests
 # 🔐 JWT AUTH FIX (IMPORTANT)
 python-jose[cryptography]==3.3.0
 
