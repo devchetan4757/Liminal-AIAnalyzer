@@ -69,7 +69,7 @@ export default function Sidebar({ active, onSelect }) {
 
         <div>
           <div className="text-sm font-semibold text-text leading-tight">
-            Sentry
+            Liminal
           </div>
 
           <div className="text-[11px] text-text-faint leading-tight">
