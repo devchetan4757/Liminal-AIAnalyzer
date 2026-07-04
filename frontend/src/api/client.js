@@ -217,3 +217,83 @@ export async function getMongoLogs(integrationId) {
     throw new Error(extractErrorMessage(err))
   }
 }
+
+// --- Render -----------------------------------------------------------
+
+export async function getRenderStatus(integrationId, { refresh = false } = {}) {
+  try {
+    const { data } = await api.get(`/integrations/${integrationId}/render/status`, {
+      params: { refresh },
+      timeout: 50000,
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// --- UptimeRobot ------------------------------------------------------
+
+export async function getUptimeRobotStatus(integrationId, { refresh = false } = {}) {
+  try {
+    const { data } = await api.get(`/integrations/${integrationId}/uptimerobot/status`, {
+      params: { refresh },
+      timeout: 35000,
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// --- Neon ---------------------------------------------------------------
+
+export async function getNeonStatus(integrationId, { refresh = false } = {}) {
+  try {
+    const { data } = await api.get(`/integrations/${integrationId}/neon/status`, {
+      params: { refresh },
+      timeout: 50000,
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// --- Watchlist --------------------------------------------------------
+
+export async function addToWatchlist(payload) {
+  try {
+    const { data } = await api.post('/watchlist', payload, { timeout: 45000 })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function getWatchlist({ status } = {}) {
+  try {
+    const { data } = await api.get('/watchlist', { params: { status } })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function resolveWatchlistItem(id) {
+  try {
+    const { data } = await api.post(`/watchlist/${id}/resolve`)
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function deleteWatchlistItem(id) {
+  try {
+    const { data } = await api.delete(`/watchlist/${id}`)
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}

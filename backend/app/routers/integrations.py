@@ -53,6 +53,39 @@ async def create_integration(
         github = manager.build("github", token=token)
         await github.validate()
 
+    if provider == "render":
+        api_key = credentials.get("api_key")
+        if not api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="Render API key is required.",
+            )
+
+        render = manager.build("render", api_key=api_key)
+        await render.validate()
+
+    if provider == "uptimerobot":
+        api_key = credentials.get("api_key")
+        if not api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="UptimeRobot API key is required.",
+            )
+
+        uptimerobot = manager.build("uptimerobot", api_key=api_key)
+        await uptimerobot.validate()
+
+    if provider == "neon":
+        api_key = credentials.get("api_key")
+        if not api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="Neon API key is required.",
+            )
+
+        neon = manager.build("neon", api_key=api_key)
+        await neon.validate()
+
     encrypted = {
         k: encrypt(v)
         for k, v in credentials.items()
@@ -119,6 +152,42 @@ async def validate_integration(
         token = decrypt(integration.encrypted_credentials["token"])
         github = manager.build("github", token=token)
         return await github.validate()
+
+    # -------------------------
+    # Render validation
+    # -------------------------
+    if integration.provider == "render":
+        api_key = decrypt(integration.encrypted_credentials["api_key"])
+        render = manager.build("render", api_key=api_key)
+
+        try:
+            return await render.validate()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    # -------------------------
+    # UptimeRobot validation
+    # -------------------------
+    if integration.provider == "uptimerobot":
+        api_key = decrypt(integration.encrypted_credentials["api_key"])
+        uptimerobot = manager.build("uptimerobot", api_key=api_key)
+
+        try:
+            return await uptimerobot.validate()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    # -------------------------
+    # Neon validation
+    # -------------------------
+    if integration.provider == "neon":
+        api_key = decrypt(integration.encrypted_credentials["api_key"])
+        neon = manager.build("neon", api_key=api_key)
+
+        try:
+            return await neon.validate()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
     raise HTTPException(
         status_code=400,
@@ -203,6 +272,108 @@ async def sync_integration(
                 external_id=repo["id"],
                 name=repo["full_name"],
                 metadata_json=repo,
+            )
+
+        return data
+
+    # -------------------------
+    # Render Sync
+    # -------------------------
+    if integration.provider == "render":
+        api_key = decrypt(integration.encrypted_credentials["api_key"])
+
+        provider = manager.build("render", api_key=api_key)
+
+        try:
+            data = await provider.sync()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Render sync failed: {exc}",
+            )
+
+        first_service = data["services"][0] if data["services"] else None
+        integration.account_identifier = first_service["id"] if first_service else None
+        integration.last_sync = datetime.now(timezone.utc)
+        db.commit()
+
+        for svc in data["services"]:
+            upsert_resource(
+                db=db,
+                integration_id=integration.id,
+                provider="render",
+                resource_type="service",
+                external_id=svc["id"],
+                name=svc["name"],
+                metadata_json=svc,
+            )
+
+        return data
+
+    # -------------------------
+    # UptimeRobot Sync
+    # -------------------------
+    if integration.provider == "uptimerobot":
+        api_key = decrypt(integration.encrypted_credentials["api_key"])
+
+        provider = manager.build("uptimerobot", api_key=api_key)
+
+        try:
+            data = await provider.sync()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"UptimeRobot sync failed: {exc}",
+            )
+
+        first_monitor = data["monitors"][0] if data["monitors"] else None
+        integration.account_identifier = str(first_monitor["id"]) if first_monitor else None
+        integration.last_sync = datetime.now(timezone.utc)
+        db.commit()
+
+        for monitor in data["monitors"]:
+            upsert_resource(
+                db=db,
+                integration_id=integration.id,
+                provider="uptimerobot",
+                resource_type="monitor",
+                external_id=monitor["id"],
+                name=monitor["name"],
+                metadata_json=monitor,
+            )
+
+        return data
+
+    # -------------------------
+    # Neon Sync
+    # -------------------------
+    if integration.provider == "neon":
+        api_key = decrypt(integration.encrypted_credentials["api_key"])
+
+        provider = manager.build("neon", api_key=api_key)
+
+        try:
+            data = await provider.sync()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Neon sync failed: {exc}",
+            )
+
+        first_project = data["projects"][0] if data["projects"] else None
+        integration.account_identifier = first_project["id"] if first_project else None
+        integration.last_sync = datetime.now(timezone.utc)
+        db.commit()
+
+        for project in data["projects"]:
+            upsert_resource(
+                db=db,
+                integration_id=integration.id,
+                provider="neon",
+                resource_type="project",
+                external_id=project["id"],
+                name=project["name"],
+                metadata_json=project,
             )
 
         return data

@@ -6,7 +6,7 @@ import os
 
 from app.config import settings
 from app.db.session import init_db
-from app.routers import analyze, chat, auth, history, integrations, mongodb
+from app.routers import analyze, chat, auth, history, integrations, mongodb, render, uptimerobot, neon, watchlist
 
 app = FastAPI(title="Malware Analysis Chatbot API")
 init_db()
@@ -22,6 +22,10 @@ app.add_middleware(
 # =========================
 app.include_router(integrations.router)
 app.include_router(mongodb.router)
+app.include_router(render.router)
+app.include_router(uptimerobot.router)
+app.include_router(neon.router)
+app.include_router(watchlist.router)
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(analyze.router, prefix="/api/analyze", tags=["analyze"])

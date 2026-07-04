@@ -8,6 +8,7 @@ import ChatWindow from "./components/ChatWindow";
 import ManualAnalysisPage from "./pages/ManualAnalysisPage";
 import HistoryPage from "./pages/HistoryPage";
 import ConnectedApps from "./pages/ConnectedApps";
+import Watchlist from "./pages/Watchlist";
 
 export default function App() {
   const [section, setSection] = useState("manual");
@@ -43,15 +44,7 @@ export default function App() {
 
 
           {section === "watchlist" && (
-            <div className="p-8">
-              <h1 className="text-3xl font-bold">
-                Watchlist
-              </h1>
-
-              <p className="mt-3 text-gray-500">
-                Coming next.
-              </p>
-            </div>
+            <Watchlist />
           )}
 
           {section === "timeline" && (

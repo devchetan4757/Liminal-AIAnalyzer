@@ -174,6 +174,25 @@ class Incident(Base):
 
     updated_at = Column(DateTime, default=_now)
 
+    # --- Watchlist fields -------------------------------------------------
+    # Link back to the Connected App resource this incident was raised
+    # from. All nullable so pre-existing rows (there shouldn't be any --
+    # this table was unused -- and any manually-created incidents) stay
+    # valid.
+    integration_id = Column(String, ForeignKey("integrations.id"), nullable=True)
+
+    provider = Column(String, nullable=True)  # render / neon / uptimerobot / github / mongodb
+
+    resource_type = Column(String, nullable=True)  # deploy / operation / monitor / ...
+
+    external_id = Column(String, nullable=True)  # provider's own ID, used for dedupe
+
+    resource_name = Column(String, nullable=True)  # human-readable name for the list UI
+
+    has_playbook = Column(Boolean, nullable=True)  # True = verified steps, False = AI best-effort
+
+    resolved_at = Column(DateTime, nullable=True)
+
 class Resource(Base):
     __tablename__ = "resources"
 

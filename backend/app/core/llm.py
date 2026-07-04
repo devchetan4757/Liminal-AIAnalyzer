@@ -179,6 +179,130 @@ def answer_question(text: str, session_id: str = None) -> str:
     return reply
 
 
+REMEDIATION_PROMPT_FULL = """A resource from a connected app is showing an error. Explain what's \
+wrong in one plain-English sentence, and propose concrete remediation steps.
+
+Provider: {provider}
+Resource type: {resource_type}
+Resource name: {resource_name}
+Title/status: {title}
+
+Raw data from the provider:
+{raw_json}
+
+Respond with ONLY a JSON object (no markdown fences, no preamble, no text outside the JSON) \
+with exactly this shape:
+
+{{
+  "summary": "one sentence, plain English, what's wrong",
+  "steps": ["short, concrete, actionable step", "... up to 5 steps total"]
+}}
+
+Rules:
+- Only use facts present in the data above. Never invent error codes, dates, or details.
+- Steps should be concrete and actionable (e.g. "Check the build logs for a missing \
+dependency"), not vague filler like "investigate the issue".
+- Keep the summary and each step short -- this is rendered as a compact card.
+"""
+
+REMEDIATION_PROMPT_SUMMARY_ONLY = """A resource from a connected app is showing an error. \
+Explain what's wrong in one plain-English sentence.
+
+Provider: {provider}
+Resource type: {resource_type}
+Resource name: {resource_name}
+Title/status: {title}
+
+Raw data from the provider:
+{raw_json}
+
+Respond with ONLY a JSON object (no markdown fences, no preamble, no text outside the JSON) \
+with exactly this shape:
+
+{{
+  "summary": "one sentence, plain English, what's wrong"
+}}
+
+Rules:
+- Only use facts present in the data above. Never invent error codes, dates, or details.
+- Keep it short -- this is rendered as a compact card.
+"""
+
+
+def suggest_remediation(
+    provider: str,
+    resource_type: str,
+    resource_name: str,
+    title: str,
+    raw: dict,
+    playbook_steps: list = None,
+) -> dict:
+    """Returns {summary, steps, has_playbook}.
+
+    If playbook_steps is provided, those are verified/human-reviewed and are
+    returned verbatim -- the LLM is only asked for the one-line summary. If
+    not, the LLM proposes steps itself and the result is always flagged
+    has_playbook=False so the UI can label it as a suggestion rather than
+    verified instructions.
+    """
+    has_playbook = playbook_steps is not None
+
+    if not client:
+        return {
+            "summary": "AI summary unavailable (no GROQ_API_KEY configured on the backend).",
+            "steps": playbook_steps or [],
+            "has_playbook": has_playbook,
+        }
+
+    raw_json = json.dumps(raw)[:20000]
+
+    if has_playbook:
+        prompt = REMEDIATION_PROMPT_SUMMARY_ONLY.format(
+            provider=provider,
+            resource_type=resource_type,
+            resource_name=resource_name,
+            title=title,
+            raw_json=raw_json,
+        )
+    else:
+        prompt = REMEDIATION_PROMPT_FULL.format(
+            provider=provider,
+            resource_type=resource_type,
+            resource_name=resource_name,
+            title=title,
+            raw_json=raw_json,
+        )
+
+    response = client.chat.completions.create(
+        model=MODEL,
+        max_tokens=500,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+    )
+    raw_text = response.choices[0].message.content
+
+    try:
+        structured = json.loads(raw_text)
+    except (ValueError, TypeError):
+        structured = {}
+
+    summary = structured.get("summary") or (title or "No summary available.")
+
+    if has_playbook:
+        steps = playbook_steps
+    else:
+        steps = (structured.get("steps") or [])[:5]
+
+    return {
+        "summary": summary,
+        "steps": steps,
+        "has_playbook": has_playbook,
+    }
+
+
 def verdict_from_summary(summary) -> str:
     """Accepts either the new structured dict or a legacy plain-text string."""
     if isinstance(summary, dict):

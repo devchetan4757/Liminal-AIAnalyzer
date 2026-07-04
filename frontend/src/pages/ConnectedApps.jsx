@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, X, Github, Database, Plug, Trash2, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Plus, X, Github, Database, Cloud, Activity, Plug, Trash2, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react'
 import { getIntegrations, createIntegration, syncIntegration, deleteIntegration } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -7,11 +7,141 @@ import { Input } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
 import GitHubDashboard from './GitHubDashboard'
 import MongoDBDashboard from './MongoDBDashboard'
+import RenderDashboard from './RenderDashboard'
+import UptimeRobotDashboard from './UptimeRobotDashboard'
+import NeonDashboard from './NeonDashboard'
 
 const PROVIDER_ICON = {
   github:  Github,
   mongodb: Database,
+  render:  Cloud,
+  uptimerobot: Activity,
+  neon: Database,
 }
+
+// Single source of truth for the connect modal: label, icon, auth type,
+// and the exact credential fields each provider needs. Adding a new
+// provider means adding one entry here — the grid, the header, the
+// form, and the payload all derive from this list.
+const PROVIDERS = [
+  {
+    key: 'github',
+    label: 'GitHub',
+    icon: Github,
+    authType: 'token',
+    namePlaceholder: 'e.g. My GitHub',
+    fields: [
+      {
+        stateKey: 'token',
+        credKey: 'token',
+        label: 'Personal Access Token',
+        placeholder: 'ghp_...',
+        type: 'password',
+      },
+    ],
+    note: (
+      <>
+        Needs scopes: <code className="font-mono">repo</code>,{' '}
+        <code className="font-mono">read:user</code>,{' '}
+        <code className="font-mono">security_events</code>
+      </>
+    ),
+  },
+  {
+    key: 'render',
+    label: 'Render',
+    icon: Cloud,
+    authType: 'api_key',
+    namePlaceholder: 'e.g. Production Render',
+    fields: [
+      {
+        stateKey: 'renderApiKey',
+        credKey: 'api_key',
+        label: 'API Key',
+        placeholder: 'rnd_...',
+        type: 'password',
+      },
+    ],
+    note: 'From Render Dashboard → Account Settings → API Keys. Read-only use here — service and deploy status only, never env var values.',
+  },
+  {
+    key: 'uptimerobot',
+    label: 'UptimeRobot',
+    icon: Activity,
+    authType: 'api_key',
+    namePlaceholder: 'e.g. Production Monitors',
+    fields: [
+      {
+        stateKey: 'uptimeApiKey',
+        credKey: 'api_key',
+        label: 'API Key',
+        placeholder: 'ur...',
+        type: 'password',
+      },
+    ],
+    note: (
+      <>
+        From UptimeRobot → My Settings → API Keys. Use the{' '}
+        <span className="font-mono">Read-Only</span> key — this
+        integration never creates, edits, or pauses monitors.
+      </>
+    ),
+  },
+  {
+    key: 'neon',
+    label: 'Neon',
+    icon: Database,
+    authType: 'api_key',
+    namePlaceholder: 'e.g. Production Neon',
+    fields: [
+      {
+        stateKey: 'neonApiKey',
+        credKey: 'api_key',
+        label: 'API Key',
+        placeholder: 'napi_...',
+        type: 'password',
+      },
+    ],
+    note: 'From Neon Console → Account Settings → API Keys. Read-only use here — project, branch, and operation metadata only, never connection strings or role passwords.',
+  },
+  {
+    key: 'mongodb',
+    label: 'MongoDB Atlas',
+    icon: Database,
+    authType: 'api_key_pair',
+    namePlaceholder: 'e.g. Production Atlas',
+    fields: [
+      {
+        stateKey: 'publicKey',
+        credKey: 'public_key',
+        label: 'Public Key',
+        placeholder: 'Atlas API public key',
+        type: 'text',
+      },
+      {
+        stateKey: 'privateKey',
+        credKey: 'private_key',
+        label: 'Private Key',
+        placeholder: 'Atlas API private key',
+        type: 'password',
+      },
+      {
+        stateKey: 'groupId',
+        credKey: 'group_id',
+        label: 'Project (Group) ID',
+        placeholder: 'e.g. 5f1b2c3d4e5f6a7b8c9d0e1f',
+        type: 'text',
+      },
+    ],
+    note: (
+      <>
+        Read-only project activity/events only — never cluster data.
+        Requires <span className="font-mono">Project Read Only</span> access
+        and the server's IP allow-listed in Atlas.
+      </>
+    ),
+  },
+]
 
 function timeAgo(iso) {
   if (!iso) return 'Never synced'
@@ -23,39 +153,35 @@ function timeAgo(iso) {
 }
 
 function ConnectModal({ onClose, onConnected }) {
-  const [provider, setProvider] = useState('github')
+  const [providerKey, setProviderKey] = useState(PROVIDERS[0].key)
   const [displayName, setDisplayName] = useState('')
-  const [token, setToken] = useState('')
-  const [publicKey, setPublicKey] = useState('')
-  const [privateKey, setPrivateKey] = useState('')
-  const [groupId, setGroupId] = useState('')
+  const [values, setValues] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const provider = PROVIDERS.find(p => p.key === providerKey)
+
+  const setField = (stateKey, value) => {
+    setValues(prev => ({ ...prev, [stateKey]: value }))
+  }
+
   const isValid =
     displayName.trim() &&
-    (provider === 'github'
-      ? token.trim()
-      : publicKey.trim() && privateKey.trim() && groupId.trim())
+    provider.fields.every(f => (values[f.stateKey] || '').trim())
 
   const submit = async () => {
     if (!isValid) return
     setLoading(true)
     setError('')
     try {
-      const credentials =
-        provider === 'github'
-          ? { token: token.trim() }
-          : {
-              public_key: publicKey.trim(),
-              private_key: privateKey.trim(),
-              group_id: groupId.trim(),
-            }
+      const credentials = Object.fromEntries(
+        provider.fields.map(f => [f.credKey, (values[f.stateKey] || '').trim()])
+      )
 
       await createIntegration({
-        provider,
+        provider: provider.key,
         display_name: displayName.trim(),
-        authentication_type: provider === 'github' ? 'token' : 'api_key_pair',
+        authentication_type: provider.authType,
         credentials,
       })
       onConnected()
@@ -69,38 +195,39 @@ function ConnectModal({ onClose, onConnected }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <Card className="w-full max-w-md relative">
+      <Card className="w-full max-w-md relative max-h-[90vh] overflow-y-auto">
         <button onClick={onClose}
           className="absolute right-4 top-4 text-text-faint hover:text-text">
           <X size={16} />
         </button>
 
-        <div className="mb-4 flex gap-2">
-          <button
-            onClick={() => setProvider('github')}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              provider === 'github' ? 'bg-accent-soft text-accent' : 'text-text-faint hover:text-text'
-            }`}
-          >
-            <Github size={14} /> GitHub
-          </button>
-          <button
-            onClick={() => setProvider('mongodb')}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              provider === 'mongodb' ? 'bg-accent-soft text-accent' : 'text-text-faint hover:text-text'
-            }`}
-          >
-            <Database size={14} /> MongoDB Atlas
-          </button>
+        <h2 className="mb-3 text-base font-semibold text-text">Connect an app</h2>
+
+        {/* provider grid — wraps neatly instead of a cramped single-line row */}
+        <div className="mb-5 grid grid-cols-3 gap-2">
+          {PROVIDERS.map(p => {
+            const Icon = p.icon
+            const active = p.key === providerKey
+            return (
+              <button
+                key={p.key}
+                onClick={() => setProviderKey(p.key)}
+                className={`flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-center transition-colors ${
+                  active
+                    ? 'border-accent bg-accent-soft text-accent'
+                    : 'border-border text-text-faint hover:border-accent/40 hover:text-text'
+                }`}
+              >
+                <Icon size={18} />
+                <span className="text-[11px] font-medium leading-tight">{p.label}</span>
+              </button>
+            )
+          })}
         </div>
 
-        <div className="mb-5 flex items-center gap-2">
-          {provider === 'github'
-            ? <Github size={20} className="text-text" />
-            : <Database size={20} className="text-text" />}
-          <h2 className="text-base font-semibold text-text">
-            Connect {provider === 'github' ? 'GitHub' : 'MongoDB Atlas'}
-          </h2>
+        <div className="mb-4 flex items-center gap-2 border-t border-border pt-4">
+          <provider.icon size={18} className="text-text" />
+          <h3 className="text-sm font-semibold text-text">Connect {provider.label}</h3>
         </div>
 
         <div className="flex flex-col gap-3">
@@ -109,68 +236,28 @@ function ConnectModal({ onClose, onConnected }) {
               Display Name
             </label>
             <Input
-              placeholder={provider === 'github' ? 'e.g. My GitHub' : 'e.g. Production Atlas'}
+              placeholder={provider.namePlaceholder}
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
             />
           </div>
 
-          {provider === 'github' ? (
-            <div>
+          {provider.fields.map(f => (
+            <div key={f.stateKey}>
               <label className="mb-1.5 block text-xs font-medium text-text-dim">
-                Personal Access Token
+                {f.label}
               </label>
               <Input
-                placeholder="ghp_..."
-                type="password"
-                value={token}
-                onChange={e => setToken(e.target.value)}
+                placeholder={f.placeholder}
+                type={f.type}
+                value={values[f.stateKey] || ''}
+                onChange={e => setField(f.stateKey, e.target.value)}
               />
-              <p className="mt-1.5 text-[11px] text-text-faint">
-                Needs scopes: <code className="font-mono">repo</code>,{' '}
-                <code className="font-mono">read:user</code>,{' '}
-                <code className="font-mono">security_events</code>
-              </p>
             </div>
-          ) : (
-            <>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-text-dim">
-                  Public Key
-                </label>
-                <Input
-                  placeholder="Atlas API public key"
-                  value={publicKey}
-                  onChange={e => setPublicKey(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-text-dim">
-                  Private Key
-                </label>
-                <Input
-                  placeholder="Atlas API private key"
-                  type="password"
-                  value={privateKey}
-                  onChange={e => setPrivateKey(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-text-dim">
-                  Project (Group) ID
-                </label>
-                <Input
-                  placeholder="e.g. 5f1b2c3d4e5f6a7b8c9d0e1f"
-                  value={groupId}
-                  onChange={e => setGroupId(e.target.value)}
-                />
-              </div>
-              <p className="text-[11px] text-text-faint">
-                Read-only project activity/events only — never cluster data.
-                Requires <span className="font-mono">Project Read Only</span> access
-                and the server's IP allow-listed in Atlas.
-              </p>
-            </>
+          ))}
+
+          {provider.note && (
+            <p className="text-[11px] text-text-faint">{provider.note}</p>
           )}
         </div>
 
@@ -190,6 +277,7 @@ function ConnectModal({ onClose, onConnected }) {
     </div>
   )
 }
+
 
 function IntegrationRow({ integration, active, onSelect, onDelete, onSync }) {
   const [syncing, setSyncing] = useState(false)
@@ -325,7 +413,7 @@ export default function ConnectedApps() {
               <Github size={28} className="mx-auto mb-3 text-text-faint" />
               <p className="text-sm font-medium text-text">No apps connected</p>
               <p className="mt-1 text-xs text-text-faint">
-                Connect GitHub or MongoDB Atlas to start monitoring for security issues.
+                Connect GitHub, MongoDB Atlas, Render, UptimeRobot, or Neon to start monitoring for security issues.
               </p>
             </div>
           )}
@@ -355,11 +443,17 @@ export default function ConnectedApps() {
             <p className="text-sm font-medium text-text">Select a connected app</p>
             <p className="max-w-xs text-xs text-text-faint">
               Choose an integration on the left to view its security dashboard — secret leaks,
-              .env pushes, vulnerable dependencies and more.
+              .env pushes, vulnerable dependencies, failed deploys, and more.
             </p>
           </div>
          ) : selected.provider === 'mongodb' ? (
           <MongoDBDashboard integration={selected} />
+        ) : selected.provider === 'render' ? (
+          <RenderDashboard integration={selected} />
+        ) : selected.provider === 'uptimerobot' ? (
+          <UptimeRobotDashboard integration={selected} />
+        ) : selected.provider === 'neon' ? (
+          <NeonDashboard integration={selected} />
         ) : (
           <GitHubDashboard integration={selected} />
         )}
