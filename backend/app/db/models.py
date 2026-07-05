@@ -106,6 +106,16 @@ class Integration(Base):
     backref="integration",
     cascade="all, delete",
     )
+    # Added alongside events/resources above - remote_actions has a
+    # NOT NULL FK to integrations.id with no ON DELETE clause, so
+    # without this cascade, deleting an integration that ever had a
+    # remote action (redeploy, pause, delete monitor, etc.) run
+    # against it fails with a ForeignKeyViolation.
+    remote_actions = relationship(
+        "RemoteAction",
+        backref="integration",
+        cascade="all, delete",
+    )
 
 
 # ==========================================================

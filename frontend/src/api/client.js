@@ -276,6 +276,48 @@ export async function getUptimeRobotStatus(integrationId, { refresh = false } = 
   }
 }
 
+// Settings-form operations (create/edit) - separate from the one-click
+// pause/resume/reset/delete actions, which go through triggerRemoteAction
+// above via the shared /api/remote-actions endpoint.
+
+export async function getUptimeRobotMonitor(integrationId, monitorId) {
+  try {
+    const { data } = await api.get(
+      `/integrations/${integrationId}/uptimerobot/monitors/${monitorId}`,
+      { timeout: 20000 },
+    )
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function createUptimeRobotMonitor(integrationId, payload) {
+  try {
+    const { data } = await api.post(
+      `/integrations/${integrationId}/uptimerobot/monitors`,
+      payload,
+      { timeout: 35000 },
+    )
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function updateUptimeRobotMonitor(integrationId, monitorId, payload) {
+  try {
+    const { data } = await api.patch(
+      `/integrations/${integrationId}/uptimerobot/monitors/${monitorId}`,
+      payload,
+      { timeout: 35000 },
+    )
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
 // --- Neon ---------------------------------------------------------------
 
 export async function getNeonStatus(integrationId, { refresh = false } = {}) {

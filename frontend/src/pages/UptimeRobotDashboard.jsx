@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw, Activity, XCircle, PauseCircle, CheckCircle2 } from 'lucide-react'
+import { RefreshCw, Activity, XCircle, PauseCircle, CheckCircle2, Plus } from 'lucide-react'
 import { getUptimeRobotStatus } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { MonitorList, IncidentList } from '../components/uptimerobot/MonitorTabs'
+import { MonitorFormDialog } from '../components/uptimerobot/MonitorFormDialog'
 
 const TABS = [
   { key: 'monitors',          label: 'Monitors',         statKey: 'total_monitors' },
@@ -37,10 +38,11 @@ function StatCard({ label, value, tone = 'neutral', icon: Icon }) {
 }
 
 export default function UptimeRobotDashboard({ integration }) {
-  const [data, setData]       = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState('')
-  const [tab, setTab]         = useState('monitors')
+  const [data, setData]           = useState(null)
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState('')
+  const [tab, setTab]             = useState('monitors')
+  const [showAddMonitor, setShowAddMonitor] = useState(false)
 
   const load = async (opts) => {
     setLoading(true)
@@ -109,10 +111,16 @@ export default function UptimeRobotDashboard({ integration }) {
             </div>
           </div>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => load({ refresh: true })} disabled={loading}>
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="primary" size="sm" onClick={() => setShowAddMonitor(true)}>
+            <Plus size={14} />
+            Add monitor
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => load({ refresh: true })} disabled={loading}>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* stats row */}
@@ -154,9 +162,22 @@ export default function UptimeRobotDashboard({ integration }) {
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {tab === 'recent_incidents'
           ? <IncidentList items={data.recent_incidents} emptyMessage={EMPTY_MESSAGE.recent_incidents} />
-          : <MonitorList items={data[tab]} emptyMessage={EMPTY_MESSAGE[tab]} integrationId={integration.id} />
+          : <MonitorList
+              items={data[tab]}
+              emptyMessage={EMPTY_MESSAGE[tab]}
+              integrationId={integration.id}
+              onChanged={() => load({ refresh: true })}
+            />
         }
       </div>
+
+      {showAddMonitor && (
+        <MonitorFormDialog
+          integrationId={integration.id}
+          onClose={() => setShowAddMonitor(false)}
+          onSaved={() => { setShowAddMonitor(false); load({ refresh: true }) }}
+        />
+      )}
 
     </div>
   )

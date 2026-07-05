@@ -7,9 +7,10 @@ GET /api/remote-actions/registry) key off this — no provider module and
 no frontend button decides risk tier independently. See
 REMOTE_ACTIONS_PLAN.md section 1 and section 6, rule 1.
 
-Only Render is wired up so far. Adding a provider/action here is the only
-place that should ever need to change to extend coverage - see
-REMOTE_ACTIONS_PLAN.md section 6, rule 6 before adding anything new.
+Render and UptimeRobot are wired up so far. Adding a provider/action
+here is the only place that should ever need to change to extend
+coverage - see REMOTE_ACTIONS_PLAN.md section 6, rule 6 before adding
+anything new.
 
 risk_tier drives the (future) auto-remediate rule: only "low" tier
 actions may ever run unattended. "medium" and "high" always require a
@@ -44,6 +45,34 @@ ACTIONS = {
         "consequence": "Stops the service from serving traffic or running at all, until resumed.",
         "risk_tier": "high",
         "resource_type": "service",
+        "requires": [],
+    },
+    ("uptimerobot", "pause"): {
+        "label": "Pause monitor",
+        "consequence": "Stops UptimeRobot from checking this monitor until it's resumed. No alerts will fire while paused.",
+        "risk_tier": "low",
+        "resource_type": "monitor",
+        "requires": [],
+    },
+    ("uptimerobot", "resume"): {
+        "label": "Resume monitor",
+        "consequence": "Starts checks again on a paused monitor.",
+        "risk_tier": "low",
+        "resource_type": "monitor",
+        "requires": [],
+    },
+    ("uptimerobot", "reset"): {
+        "label": "Reset monitor stats",
+        "consequence": "Permanently erases this monitor's uptime ratio, response-time history, and past up/down logs. The monitor itself is not deleted and checks continue. Cannot be undone.",
+        "risk_tier": "high",
+        "resource_type": "monitor",
+        "requires": [],
+    },
+    ("uptimerobot", "delete"): {
+        "label": "Delete monitor",
+        "consequence": "Permanently deletes this monitor and all of its history. Cannot be undone.",
+        "risk_tier": "high",
+        "resource_type": "monitor",
         "requires": [],
     },
 }

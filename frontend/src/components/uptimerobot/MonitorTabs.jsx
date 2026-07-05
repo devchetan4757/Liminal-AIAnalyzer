@@ -1,7 +1,11 @@
-import { ExternalLink, CheckCircle2, XCircle, PauseCircle, Activity } from 'lucide-react'
+import { useState } from 'react'
+import { ExternalLink, CheckCircle2, XCircle, PauseCircle, PlayCircle, RotateCcw, Trash2, Activity, Pencil } from 'lucide-react'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
+import { Button } from '../ui/Button'
 import { AddToWatchlistButton } from '../watchlist/AddToWatchlistButton'
+import { RemoteActionButton } from '../actions/RemoteActionButton'
+import { MonitorFormDialog } from './MonitorFormDialog'
 
 const STATUS_TONE = {
   up: 'success',
@@ -30,13 +34,16 @@ function EmptyState({ message }) {
   )
 }
 
-export function MonitorList({ items, emptyMessage, integrationId }) {
+export function MonitorList({ items, emptyMessage, integrationId, onChanged }) {
+  const [editingId, setEditingId] = useState(null)
+
   if (!items?.length) return <EmptyState message={emptyMessage} />
 
   return (
     <div className="flex flex-col gap-2">
       {items.map((m) => {
         const tone = STATUS_TONE[m.status] || 'neutral'
+        const paused = m.status === 'paused'
         return (
           <Card key={m.id} className={tone === 'danger' ? 'border-danger/40 bg-danger-soft/20' : undefined}>
             <div className="flex items-start justify-between gap-3">
@@ -68,6 +75,53 @@ export function MonitorList({ items, emptyMessage, integrationId }) {
                     raw={m}
                   />
                 )}
+                {integrationId && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setEditingId(m.id)}
+                    title="Edit monitor config"
+                  >
+                    <Pencil size={12} />
+                    Edit
+                  </Button>
+                )}
+                {integrationId && (
+                  <RemoteActionButton
+                    integrationId={integrationId}
+                    provider="uptimerobot"
+                    action={paused ? 'resume' : 'pause'}
+                    resourceId={String(m.id)}
+                    resourceName={m.name}
+                    variant="secondary"
+                    icon={paused ? PlayCircle : PauseCircle}
+                    onDone={onChanged}
+                  />
+                )}
+                {integrationId && (
+                  <RemoteActionButton
+                    integrationId={integrationId}
+                    provider="uptimerobot"
+                    action="reset"
+                    resourceId={String(m.id)}
+                    resourceName={m.name}
+                    variant="secondary"
+                    icon={RotateCcw}
+                    onDone={onChanged}
+                  />
+                )}
+                {integrationId && (
+                  <RemoteActionButton
+                    integrationId={integrationId}
+                    provider="uptimerobot"
+                    action="delete"
+                    resourceId={String(m.id)}
+                    resourceName={m.name}
+                    variant="danger"
+                    icon={Trash2}
+                    onDone={onChanged}
+                  />
+                )}
                 <a
                   href="https://uptimerobot.com/dashboard"
                   target="_blank"
@@ -82,6 +136,15 @@ export function MonitorList({ items, emptyMessage, integrationId }) {
           </Card>
         )
       })}
+
+      {editingId && (
+        <MonitorFormDialog
+          integrationId={integrationId}
+          monitorId={editingId}
+          onClose={() => setEditingId(null)}
+          onSaved={() => { setEditingId(null); onChanged?.() }}
+        />
+      )}
     </div>
   )
 }
