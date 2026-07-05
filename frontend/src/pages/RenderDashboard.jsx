@@ -153,11 +153,19 @@ export default function RenderDashboard({ integration }) {
       {/* tab content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {tab === 'services'
-          ? <ServiceList items={data.services} emptyMessage={EMPTY_MESSAGE.services} />
+          ? <ServiceList
+              items={data.services}
+              emptyMessage={EMPTY_MESSAGE.services}
+              integrationId={integration.id}
+              onChanged={() => load({ refresh: true })}
+            />
           : <DeployList
               items={data[tab]}
               emptyMessage={EMPTY_MESSAGE[tab]}
               integrationId={integration.id}
+              allowRollback={tab === 'failed_deploys' || tab === 'recent_deploys'}
+              allDeploys={data.recent_deploys}
+              onChanged={() => load({ refresh: true })}
             />
         }
       </div>

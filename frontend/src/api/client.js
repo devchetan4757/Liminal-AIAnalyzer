@@ -1,5 +1,4 @@
-import axios from 'axios'
-
+import axios from 'axios'                                                                            
 const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
@@ -226,6 +225,37 @@ export async function getRenderStatus(integrationId, { refresh = false } = {}) {
       params: { refresh },
       timeout: 50000,
     })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// --- Remote Actions (mutating, registry-driven, shared across providers) -
+
+export async function getActionRegistry(provider) {
+  try {
+    const { data } = await api.get('/remote-actions/registry', { params: { provider } })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function getRemoteActions({ integrationId, provider, incidentId, limit } = {}) {
+  try {
+    const { data } = await api.get('/remote-actions', {
+      params: { integration_id: integrationId, provider, incident_id: incidentId, limit },
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function triggerRemoteAction(payload) {
+  try {
+    const { data } = await api.post('/remote-actions', payload, { timeout: 35000 })
     return data
   } catch (err) {
     throw new Error(extractErrorMessage(err))

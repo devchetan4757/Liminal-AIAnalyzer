@@ -1,7 +1,8 @@
-import { ExternalLink, CheckCircle2, XCircle, PauseCircle, Cloud, GitCommit } from 'lucide-react'
+import { ExternalLink, CheckCircle2, XCircle, PauseCircle, Cloud, GitCommit, RotateCw } from 'lucide-react'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { AddToWatchlistButton } from '../watchlist/AddToWatchlistButton'
+import { RemoteActionButton } from '../actions/RemoteActionButton'
 
 const STATUS_TONE = {
   live: 'success',
@@ -35,13 +36,25 @@ function EmptyState({ message }) {
   )
 }
 
-export function DeployList({ items, emptyMessage, integrationId }) {
+// Finds the most recent "live" deploy for this service that happened
+// before the given deploy - i.e. the rollback target. Returns null if
+// there's nothing to roll back to (no prior successful deploy known).
+function findRollbackTarget(item, allDeploys) {
+  if (!allDeploys?.length) return null
+  const sameService = allDeploys.filter((d) => d.service_id === item.service_id)
+  const before = sameService.filter((d) => new Date(d.created_at) < new Date(item.created_at))
+  return before.find((d) => d.status === 'live') || null
+}
+
+export function DeployList({ items, emptyMessage, integrationId, allowRollback, allDeploys, onChanged }) {
   if (!items?.length) return <EmptyState message={emptyMessage} />
 
   return (
     <div className="flex flex-col gap-2">
       {items.map((item) => {
         const tone = STATUS_TONE[item.status] || 'neutral'
+        const rollbackTarget = allowRollback && integrationId ? findRollbackTarget(item, allDeploys) : null
+
         return (
           <Card key={item.id} className={tone === 'danger' ? 'border-danger/40 bg-danger-soft/20' : undefined}>
             <div className="flex items-start justify-between gap-3">
@@ -65,6 +78,17 @@ export function DeployList({ items, emptyMessage, integrationId }) {
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {rollbackTarget && (
+                  <RemoteActionButton
+                    integrationId={integrationId}
+                    provider="render"
+                    action="rollback"
+                    resourceId={item.service_id}
+                    resourceName={item.service_name}
+                    extra={{ deploy_id: rollbackTarget.id }}
+                    onDone={onChanged}
+                  />
+                )}
                 {tone === 'danger' && integrationId && (
                   <AddToWatchlistButton
                     integrationId={integrationId}
@@ -95,7 +119,7 @@ export function DeployList({ items, emptyMessage, integrationId }) {
   )
 }
 
-export function ServiceList({ items, emptyMessage }) {
+export function ServiceList({ items, emptyMessage, integrationId, onChanged }) {
   if (!items?.length) return <EmptyState message={emptyMessage} />
 
   return (
@@ -119,17 +143,42 @@ export function ServiceList({ items, emptyMessage }) {
                   </p>
                 )}
               </div>
-              {svc.url && (
-                <a
-                  href={svc.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="shrink-0 text-text-faint hover:text-accent transition-colors"
-                  title="Open service"
-                >
-                  <ExternalLink size={15} />
-                </a>
-              )}
+              <div className="flex shrink-0 items-center gap-2">
+                {integrationId && !suspended && (
+                  <RemoteActionButton
+                    integrationId={integrationId}
+                    provider="render"
+                    action="redeploy"
+                    resourceId={svc.id}
+                    resourceName={svc.name}
+                    icon={RotateCw}
+                    onDone={onChanged}
+                  />
+                )}
+                {integrationId && (
+                  <RemoteActionButton
+                    integrationId={integrationId}
+                    provider="render"
+                    action={suspended ? 'resume' : 'suspend'}
+                    resourceId={svc.id}
+                    resourceName={svc.name}
+                    variant={suspended ? 'secondary' : 'danger'}
+                    icon={PauseCircle}
+                    onDone={onChanged}
+                  />
+                )}
+                {svc.url && (
+                  <a
+                    href={svc.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 text-text-faint hover:text-accent transition-colors"
+                    title="Open service"
+                  >
+                    <ExternalLink size={15} />
+                  </a>
+                )}
+              </div>
             </div>
           </Card>
         )

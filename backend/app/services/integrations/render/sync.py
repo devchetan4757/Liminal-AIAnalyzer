@@ -41,6 +41,67 @@ class RenderSyncService:
 
         return response.json()
 
+    def _post(self, path: str, json_body: dict = None, ok_statuses=(200, 201, 202, 204)):
+        response = requests.post(
+            f"{RENDER_BASE_URL}{path}",
+            headers=self.headers,
+            json=json_body or {},
+            timeout=20,
+        )
+
+        if response.status_code not in ok_statuses:
+            raise Exception(
+                f"Render request to {path} failed ({response.status_code}): {response.text[:200]}"
+            )
+
+        if response.status_code == 204 or not response.text:
+            return {}
+
+        return response.json()
+
+    # -------------------------------------------------------------
+    # Actions (mutating). Each is a deliberate, user-initiated
+    # remote operation - not part of the passive sync/logs() path.
+    # Still scoped the same way as read: service/deploy lifecycle
+    # only, never env vars, secrets, or disk contents.
+    # -------------------------------------------------------------
+
+    def trigger_deploy(self, service_id: str, clear_cache: bool = False):
+        """Kick off a new deploy for a service (optionally clearing build cache)."""
+        body = {"clearCache": "clear"} if clear_cache else {}
+        dep = self._post(f"/services/{service_id}/deploys", json_body=body)
+        dep = _unwrap(dep, "deploy")
+        return {
+            "id": dep.get("id"),
+            "status": dep.get("status"),
+            "created_at": dep.get("createdAt"),
+        }
+
+    def rollback(self, service_id: str, deploy_id: str):
+        """Roll a service back to a previously successful deploy."""
+        dep = self._post(f"/services/{service_id}/rollback", json_body={"deployId": deploy_id})
+        dep = _unwrap(dep, "deploy")
+        return {
+            "id": dep.get("id") or deploy_id,
+            "status": dep.get("status") or "requested",
+            "rolled_back_to": deploy_id,
+        }
+
+    def cancel_deploy(self, service_id: str, deploy_id: str):
+        """Cancel an in-progress deploy."""
+        self._post(f"/services/{service_id}/deploys/{deploy_id}/cancel")
+        return {"id": deploy_id, "status": "canceled"}
+
+    def suspend_service(self, service_id: str):
+        """Suspend a service (stops it from serving traffic / running)."""
+        self._post(f"/services/{service_id}/suspend")
+        return {"id": service_id, "suspended": True}
+
+    def resume_service(self, service_id: str):
+        """Resume a previously suspended service."""
+        self._post(f"/services/{service_id}/resume")
+        return {"id": service_id, "suspended": False}
+
     def services(self, limit: int = 100):
         """
         List services owned/accessible by this API key. Read-only

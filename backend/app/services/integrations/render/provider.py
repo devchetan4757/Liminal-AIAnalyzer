@@ -27,3 +27,23 @@ class RenderProvider(IntegrationProvider):
 
     async def disconnect(self):
         return True
+
+    # Deliberate, user-initiated remote actions. Still no method here
+    # (or in RenderSyncService) that touches env vars - only service /
+    # deploy lifecycle operations that Render's own dashboard exposes.
+    # Names match the shared registry in app/services/remote_actions/registry.py.
+    ACTIONS = {
+        "redeploy": "trigger_deploy",
+        "rollback": "rollback",
+        "suspend": "suspend_service",
+        "resume": "resume_service",
+    }
+
+    async def execute_action(self, action: str, **kwargs):
+        if action not in self.ACTIONS:
+            raise ValueError(f"Unsupported Render action: {action}")
+
+        service = RenderSyncService(self.api_key)
+        method = getattr(service, self.ACTIONS[action])
+
+        return method(**kwargs)

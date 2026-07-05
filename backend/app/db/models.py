@@ -221,3 +221,38 @@ class Resource(Base):
     created_at = Column(DateTime, default=_now)
 
     updated_at = Column(DateTime, default=_now)
+
+
+# ==========================================================
+# Remote Actions (audit trail for mutating operations)
+# ==========================================================
+# See REMOTE_ACTIONS_PLAN.md. Every remote action - regardless of
+# whether it was fired from a dashboard button or a Watchlist item -
+# gets a row here before/after the provider call, success or failure.
+
+class RemoteAction(Base):
+    __tablename__ = "remote_actions"
+
+    id = Column(String, primary_key=True, default=_uuid)
+
+    integration_id = Column(String, ForeignKey("integrations.id"), nullable=False)
+
+    provider = Column(String, nullable=False, index=True)  # render / neon / ...
+
+    action = Column(String, nullable=False, index=True)  # redeploy / rollback / suspend / resume
+
+    resource_id = Column(String, nullable=False)  # provider's resource ID acted on
+
+    resource_name = Column(String, nullable=True)  # human-readable name for the log/UI
+
+    triggered_by = Column(String, default="manual")  # manual / watchlist / auto
+
+    incident_id = Column(String, ForeignKey("incidents.id"), nullable=True)
+
+    status = Column(String, default="pending")  # pending / succeeded / failed
+
+    result = Column(JSON, nullable=True)  # raw response / error from provider
+
+    requested_at = Column(DateTime, default=_now)
+
+    completed_at = Column(DateTime, nullable=True)

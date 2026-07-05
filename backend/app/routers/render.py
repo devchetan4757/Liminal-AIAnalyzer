@@ -14,10 +14,10 @@ router = APIRouter(
     tags=["Render"],
 )
 
-# Intentionally the ONLY endpoint in this file. Render integrations are
-# scoped to service/deploy metadata for security monitoring - there is
-# no route here (and there should never be one) that reads environment
-# variable values, disk contents, or triggers a deploy/mutation.
+# Read-only status endpoint. Mutating actions (redeploy, rollback,
+# suspend, resume) live in app/routers/remote_actions.py - a single
+# generic, registry-driven router shared across providers - not here.
+# See REMOTE_ACTIONS_PLAN.md.
 
 # Same TTL and reuse of the cached_scan / cached_scan_at columns that
 # GitHub's security scan uses (see routers/integrations.py). Those

@@ -42,6 +42,7 @@ def _serialize(incident: Incident) -> dict:
         "external_id": incident.external_id,
         "resource_name": incident.resource_name,
         "has_playbook": incident.has_playbook,
+        "metadata": incident.incident_metadata,
         "created_at": incident.created_at.isoformat() if incident.created_at else None,
         "updated_at": incident.updated_at.isoformat() if incident.updated_at else None,
         "resolved_at": incident.resolved_at.isoformat() if incident.resolved_at else None,

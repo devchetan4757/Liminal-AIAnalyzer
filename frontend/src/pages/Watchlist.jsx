@@ -6,6 +6,7 @@ import {
   ChevronUp,
   ExternalLink,
   CheckCircle2,
+  XCircle,
   Trash2,
   ShieldCheck,
   Sparkles,
@@ -13,11 +14,14 @@ import {
   Database,
   Activity,
   Github,
+  History,
+  RotateCw,
 } from 'lucide-react'
-import { getWatchlist, resolveWatchlistItem, deleteWatchlistItem } from '../api/client'
+import { getWatchlist, resolveWatchlistItem, deleteWatchlistItem, getRemoteActions } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
+import { RemoteActionButton } from '../components/actions/RemoteActionButton'
 
 const PROVIDER_ICON = {
   render: Cloud,
@@ -44,10 +48,21 @@ function timeAgo(iso) {
   return `${Math.floor(mins / 1440)}d ago`
 }
 
-function WatchlistItem({ item, onResolve, onDelete, busy }) {
+// Render deploy incidents carry the full raw deploy (incl. service_id)
+// in `metadata` - that's what lets us offer a contextual "Redeploy"
+// button here without a second round trip to Render.
+function renderActionFor(item) {
+  if (item.provider !== 'render' || item.status !== 'open') return null
+  const serviceId = item.metadata?.service_id
+  if (!serviceId) return null
+  return { resourceId: serviceId, resourceName: item.resource_name }
+}
+
+function WatchlistItem({ item, onResolve, onDelete, onActionDone, busy }) {
   const [expanded, setExpanded] = useState(false)
   const Icon = PROVIDER_ICON[item.provider] || Cloud
   const steps = item.recommendations || []
+  const action = renderActionFor(item)
 
   return (
     <Card>
@@ -93,6 +108,22 @@ function WatchlistItem({ item, onResolve, onDelete, busy }) {
                   ))}
                 </ol>
               )}
+            </div>
+          )}
+
+          {action && (
+            <div className="mt-3">
+              <RemoteActionButton
+                integrationId={item.integration_id}
+                provider={item.provider}
+                action="redeploy"
+                resourceId={action.resourceId}
+                resourceName={action.resourceName}
+                triggeredBy="watchlist"
+                incidentId={item.id}
+                icon={RotateCw}
+                onDone={onActionDone}
+              />
             </div>
           )}
         </div>
@@ -143,11 +174,69 @@ function WatchlistItem({ item, onResolve, onDelete, busy }) {
   )
 }
 
+// Audit trail of every remote action fired from anywhere (dashboards or
+// this Watchlist tab) - see REMOTE_ACTIONS_PLAN.md section 5.
+function RemoteActionsLog({ reloadKey }) {
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const load = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await getRemoteActions({ limit: 100 })
+      setRows(Array.isArray(data) ? data : [])
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [reloadKey])
+
+  if (loading) return <div className="h-16 animate-pulse rounded-lg bg-bg-inset" />
+  if (error) return <p className="text-sm text-danger">{error}</p>
+  if (!rows.length) return <p className="text-sm text-text-faint">No remote actions fired yet.</p>
+
+  return (
+    <div className="flex flex-col gap-2">
+      {rows.map((row) => (
+        <Card key={row.id}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-2">
+                <Badge tone="neutral">{row.provider}</Badge>
+                <span className="text-sm font-medium text-text">{row.action}</span>
+                <span className="text-[11px] text-text-faint truncate">{row.resource_name}</span>
+              </div>
+              <p className="text-[11px] text-text-faint">
+                {row.triggered_by} · {timeAgo(row.requested_at)}
+                {row.status === 'failed' && row.result?.error && ` · ${row.result.error}`}
+              </p>
+            </div>
+            {row.status === 'succeeded' ? (
+              <Badge tone="success"><CheckCircle2 size={11} /> succeeded</Badge>
+            ) : row.status === 'failed' ? (
+              <Badge tone="danger"><XCircle size={11} /> failed</Badge>
+            ) : (
+              <Badge tone="neutral">pending</Badge>
+            )}
+          </div>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
 export default function Watchlist() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const [tab, setTab] = useState('watchlist') // watchlist | actions
+  const [actionsReloadKey, setActionsReloadKey] = useState(0)
 
   const load = async () => {
     setLoading(true)
@@ -190,66 +279,95 @@ export default function Watchlist() {
     }
   }
 
+  const handleActionDone = () => setActionsReloadKey((k) => k + 1)
+
   const open = items.filter((i) => i.status === 'open')
   const resolved = items.filter((i) => i.status === 'resolved')
 
   return (
     <div className="flex h-full flex-col overflow-y-auto px-6 py-6">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Eye size={18} className="text-accent" />
           <h1 className="text-xl font-semibold text-text">Watchlist</h1>
         </div>
-        <Button variant="ghost" size="sm" onClick={load}>
+        <Button variant="ghost" size="sm" onClick={tab === 'watchlist' ? load : () => setActionsReloadKey((k) => k + 1)}>
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Refresh
         </Button>
       </div>
 
-      {error && <p className="mb-4 text-sm text-danger">{error}</p>}
+      <div className="mb-6 flex border-b border-border">
+        <button
+          onClick={() => setTab('watchlist')}
+          className={`flex items-center gap-1.5 border-b-2 px-4 py-2 text-xs font-medium transition-colors ${
+            tab === 'watchlist' ? 'border-accent text-accent' : 'border-transparent text-text-faint hover:text-text'
+          }`}
+        >
+          <Eye size={13} /> Watchlist
+        </button>
+        <button
+          onClick={() => setTab('actions')}
+          className={`flex items-center gap-1.5 border-b-2 px-4 py-2 text-xs font-medium transition-colors ${
+            tab === 'actions' ? 'border-accent text-accent' : 'border-transparent text-text-faint hover:text-text'
+          }`}
+        >
+          <History size={13} /> Remote Actions Log
+        </button>
+      </div>
 
-      {!loading && items.length === 0 && !error && (
-        <p className="text-sm text-text-faint">
-          Nothing here yet — add a failing item from any Connected App dashboard to track it here.
-        </p>
-      )}
+      {tab === 'actions' ? (
+        <RemoteActionsLog reloadKey={actionsReloadKey} />
+      ) : (
+        <>
+          {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
-      {open.length > 0 && (
-        <div className="mb-6">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-faint">
-            Open ({open.length})
-          </h2>
-          <div className="flex flex-col gap-2">
-            {open.map((item) => (
-              <WatchlistItem
-                key={item.id}
-                item={item}
-                onResolve={handleResolve}
-                onDelete={handleDelete}
-                busy={busyId === item.id}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+          {!loading && items.length === 0 && !error && (
+            <p className="text-sm text-text-faint">
+              Nothing here yet — add a failing item from any Connected App dashboard to track it here.
+            </p>
+          )}
 
-      {resolved.length > 0 && (
-        <div>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-faint">
-            Resolved ({resolved.length})
-          </h2>
-          <div className="flex flex-col gap-2 opacity-70">
-            {resolved.map((item) => (
-              <WatchlistItem
-                key={item.id}
-                item={item}
-                onResolve={handleResolve}
-                onDelete={handleDelete}
-                busy={busyId === item.id}
-              />
-            ))}
-          </div>
-        </div>
+          {open.length > 0 && (
+            <div className="mb-6">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-faint">
+                Open ({open.length})
+              </h2>
+              <div className="flex flex-col gap-2">
+                {open.map((item) => (
+                  <WatchlistItem
+                    key={item.id}
+                    item={item}
+                    onResolve={handleResolve}
+                    onDelete={handleDelete}
+                    onActionDone={handleActionDone}
+                    busy={busyId === item.id}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {resolved.length > 0 && (
+            <div>
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-faint">
+                Resolved ({resolved.length})
+              </h2>
+              <div className="flex flex-col gap-2 opacity-70">
+                {resolved.map((item) => (
+                  <WatchlistItem
+                    key={item.id}
+                    item={item}
+                    onResolve={handleResolve}
+                    onDelete={handleDelete}
+                    onActionDone={handleActionDone}
+                    busy={busyId === item.id}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
