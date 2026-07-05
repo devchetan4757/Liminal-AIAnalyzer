@@ -25,6 +25,7 @@ python-jose[cryptography]==3.3.0
 
 # 🗄️ Database ORM
 SQLAlchemy==2.0.41
+psycopg2-binary
 
 setuptools==82.0.1
 sniffio==1.3.1

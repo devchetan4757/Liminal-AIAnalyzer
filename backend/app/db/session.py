@@ -1,14 +1,23 @@
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# SQLite file lives next to the backend app, not tied to cwd at runtime.
-DB_PATH = Path(__file__).resolve().parent.parent.parent / "sentrychat.db"
-DATABASE_URL = f"sqlite:///{DB_PATH}"
+load_dotenv()
 
-# check_same_thread=False is required for SQLite + FastAPI's threaded request
-# handling. Safe here because each request gets its own session (see get_db below).
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# Real DB (e.g. Neon Postgres) via env var. Falls back to local SQLite
+# only if DATABASE_URL isn't set, so local dev still works without Postgres.
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    # Postgres (Neon, etc.) doesn't need the SQLite-only connect_args.
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+else:
+    DB_PATH = Path(__file__).resolve().parent.parent.parent / "sentrychat.db"
+    DATABASE_URL = f"sqlite:///{DB_PATH}"
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
