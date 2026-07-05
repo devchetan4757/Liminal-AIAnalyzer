@@ -6,3 +6,4 @@ node_modules/
 chatbot.zip
 
 backend/sentrychat.db
+*.db
