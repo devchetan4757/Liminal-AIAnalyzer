@@ -7,8 +7,10 @@ from datetime import datetime, timezone, timedelta
 from app.services.integrations.github.sync import GitHubSyncService
 from app.db.resources import upsert_resource
 from app.db.session import get_db
-from app.db.models import Integration
+from app.db.models import Integration, User
 from app.core.encryption import encrypt, decrypt
+from app.core.deps import get_current_user
+from app.core.ownership import get_owned_integration
 from app.services.integrations.registry import manager
 
 router = APIRouter(
@@ -21,9 +23,13 @@ router = APIRouter(
 # LIST INTEGRATIONS
 # -------------------------
 @router.get("/")
-def list_integrations(db: Session = Depends(get_db)):
+def list_integrations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     return (
         db.query(Integration)
+        .filter(Integration.user_id == current_user.id)
         .order_by(Integration.created_at.desc())
         .all()
     )
@@ -36,6 +42,7 @@ def list_integrations(db: Session = Depends(get_db)):
 async def create_integration(
     payload: dict,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     provider = payload.get("provider")
     display_name = payload.get("display_name")
@@ -92,6 +99,7 @@ async def create_integration(
     }
 
     integration = Integration(
+        user_id=current_user.id,
         provider=provider,
         display_name=display_name,
         authentication_type=authentication_type,
@@ -113,15 +121,9 @@ async def create_integration(
 async def validate_integration(
     integration_id: str,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    integration = (
-        db.query(Integration)
-        .filter(Integration.id == integration_id)
-        .first()
-    )
-
-    if integration is None:
-        raise HTTPException(status_code=404, detail="Integration not found.")
+    integration = get_owned_integration(db, integration_id, current_user.id)
 
     # -------------------------
     # MongoDB validation
@@ -202,15 +204,9 @@ async def validate_integration(
 async def sync_integration(
     integration_id: str,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    integration = (
-        db.query(Integration)
-        .filter(Integration.id == integration_id)
-        .first()
-    )
-
-    if integration is None:
-        raise HTTPException(status_code=404, detail="Integration not found.")
+    integration = get_owned_integration(db, integration_id, current_user.id)
 
     # -------------------------
     # MongoDB Sync
@@ -391,15 +387,9 @@ async def sync_integration(
 def delete_integration(
     integration_id: str,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    integration = (
-        db.query(Integration)
-        .filter(Integration.id == integration_id)
-        .first()
-    )
-
-    if integration is None:
-        raise HTTPException(status_code=404, detail="Integration not found.")
+    integration = get_owned_integration(db, integration_id, current_user.id)
 
     db.delete(integration)
     db.commit()
@@ -418,21 +408,9 @@ async def github_security(
     integration_id: str,
     refresh: bool = False,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    integration = (
-        db.query(Integration)
-        .filter(Integration.id == integration_id)
-        .first()
-    )
-
-    if integration is None:
-        raise HTTPException(status_code=404, detail="Integration not found.")
-
-    if integration.provider != "github":
-        raise HTTPException(
-            status_code=400,
-            detail="Only available for GitHub integrations.",
-        )
+    integration = get_owned_integration(db, integration_id, current_user.id, provider="github")
 
     # Serve from cache unless it's missing, stale, or the caller asked to
     # bypass it. security_scan() fans out to several API calls per repo, so
@@ -499,15 +477,9 @@ async def github_repo_peek(
     integration_id: str,
     repo: str,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    integration = (
-        db.query(Integration)
-        .filter(Integration.id == integration_id)
-        .first()
-    )
-
-    if integration is None:
-        raise HTTPException(status_code=404, detail="Integration not found.")
+    integration = get_owned_integration(db, integration_id, current_user.id, provider="github")
 
     token = decrypt(integration.encrypted_credentials["token"])
 

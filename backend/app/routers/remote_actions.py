@@ -8,8 +8,10 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.db.models import Integration, RemoteAction
+from app.db.models import RemoteAction, User
 from app.core.encryption import decrypt
+from app.core.deps import get_current_user
+from app.core.ownership import get_owned_integration
 from app.services.integrations.registry import manager
 from app.services.remote_actions.registry import get_action, list_actions
 
@@ -23,6 +25,11 @@ router = APIRouter(
 # NOT special-case "render" anywhere below - the registry + each
 # provider's own ACTIONS map (see e.g. RenderProvider.ACTIONS) are what
 # make an action available at all. Only Render has entries today.
+#
+# Every route here requires get_current_user and scopes both the
+# integration lookup and the remote_actions history query to that
+# account - one account can never see or trigger actions against
+# another account's connected apps.
 
 
 class RemoteActionRequest(BaseModel):
@@ -66,8 +73,14 @@ def list_remote_actions(
     incident_id: Optional[str] = None,
     limit: int = 100,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    q = db.query(RemoteAction)
+    # Filter via the integration relationship rather than trusting a raw
+    # integration_id param, so this can never return another account's
+    # action history even if integration_id is supplied.
+    q = db.query(RemoteAction).filter(
+        RemoteAction.integration.has(user_id=current_user.id)
+    )
 
     if integration_id:
         q = q.filter(RemoteAction.integration_id == integration_id)
@@ -81,7 +94,11 @@ def list_remote_actions(
 
 
 @router.post("")
-async def trigger_remote_action(req: RemoteActionRequest, db: Session = Depends(get_db)):
+async def trigger_remote_action(
+    req: RemoteActionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     meta = get_action(req.provider, req.action)
     if meta is None:
         raise HTTPException(
@@ -105,13 +122,7 @@ async def trigger_remote_action(req: RemoteActionRequest, db: Session = Depends(
             detail=f"Action '{req.action}' requires: {', '.join(missing)}.",
         )
 
-    integration = (
-        db.query(Integration)
-        .filter(Integration.id == req.integration_id)
-        .first()
-    )
-    if integration is None:
-        raise HTTPException(status_code=404, detail="Integration not found.")
+    integration = get_owned_integration(db, req.integration_id, current_user.id)
     if integration.provider != req.provider:
         raise HTTPException(status_code=400, detail="Integration provider mismatch.")
 

@@ -1,39 +1,77 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw, Activity, XCircle, PauseCircle, CheckCircle2, Plus } from 'lucide-react'
-import { getUptimeRobotStatus } from '../api/client'
+import {
+  RefreshCw,
+  Rocket,
+  Globe,
+  Cloud,
+  Activity,
+  Plus
+} from 'lucide-react'
+
+import { getVercelStatus } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { MonitorList, IncidentList } from '../components/uptimerobot/MonitorTabs'
-import { MonitorFormDialog } from '../components/uptimerobot/MonitorFormDialog'
+
+import {
+  ProjectList,
+  DeploymentList
+} from '../components/vercel/ProjectTabs'
+
+import { ProjectFormDialog } from '../components/vercel/ProjectFormDialog'
 
 const TABS = [
-  { key: 'monitors', label: 'Monitors', statKey: 'total_monitors' },
-  { key: 'down_monitors', label: 'Down', statKey: 'down_count' },
-  { key: 'paused_monitors', label: 'Paused', statKey: 'paused_count' },
-  { key: 'recent_incidents', label: 'Recent Incidents', statKey: null },
+  {
+    key: 'projects',
+    label: 'Projects',
+    statKey: 'total_projects',
+  },
+  {
+    key: 'deployments',
+    label: 'Deployments',
+    statKey: 'deployment_count',
+  },
+  {
+    key: 'domains',
+    label: 'Domains',
+    statKey: 'domain_count',
+  },
+  {
+    key: 'failed_deployments',
+    label: 'Failed',
+    statKey: 'failed_count',
+  },
 ]
 
 const EMPTY_MESSAGE = {
-  monitors: 'No monitors found for this account.',
-  down_monitors: 'Nothing down right now — all green.',
-  paused_monitors: 'No paused monitors.',
-  recent_incidents: 'No recent up/down events.',
+  projects: 'No Vercel projects found.',
+  deployments: 'No deployments.',
+  domains: 'No custom domains.',
+  failed_deployments: 'No failed deployments.',
 }
 
-function StatCard({ label, value, tone = 'neutral', icon: Icon }) {
+function StatCard({
+  label,
+  value,
+  tone = 'neutral',
+  icon: Icon,
+}) {
+
   const colours = {
     neutral: 'text-text-dim',
     warning: 'text-warning',
-    danger: 'text-danger',
     success: 'text-success',
+    danger: 'text-danger',
   }
 
   return (
-    <Card className="flex min-w-0 flex-col gap-1">
-      <div className={`flex items-center gap-1.5 text-xs font-medium ${colours[tone]}`}>
+    <Card className="flex flex-col gap-1 min-w-[120px]">
+      <div
+        className={`flex items-center gap-1.5 text-xs font-medium ${colours[tone]}`}
+      >
         <Icon size={14} />
         {label}
       </div>
+
       <div className="font-mono text-2xl font-bold text-text">
         {value}
       </div>
@@ -41,19 +79,26 @@ function StatCard({ label, value, tone = 'neutral', icon: Icon }) {
   )
 }
 
-export default function UptimeRobotDashboard({ integration }) {
+export default function VercelDashboard({
+  integration,
+}) {
+
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [tab, setTab] = useState('monitors')
-  const [showAddMonitor, setShowAddMonitor] = useState(false)
+  const [tab, setTab] = useState('projects')
+  const [showNewProject, setShowNewProject] = useState(false)
 
   const load = async (opts) => {
     setLoading(true)
     setError('')
 
     try {
-      const result = await getUptimeRobotStatus(integration.id, opts)
+      const result = await getVercelStatus(
+        integration.id,
+        opts,
+      )
+
       setData(result)
     } catch (err) {
       setError(err.message)
@@ -66,34 +111,37 @@ export default function UptimeRobotDashboard({ integration }) {
     load()
   }, [integration.id])
 
-  if (loading) {
+  if (loading)
     return (
       <div className="flex h-full flex-col gap-4 p-6">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
+
+        <div className="flex gap-3">
+          {[1,2,3,4].map(i=>(
             <div
               key={i}
-              className="h-20 animate-pulse rounded-lg bg-bg-inset"
+              className="h-20 w-32 animate-pulse rounded-lg bg-bg-inset"
             />
           ))}
         </div>
 
         <div className="mt-4 flex flex-col gap-2">
-          {[1, 2, 3].map((i) => (
+          {[1,2,3].map(i=>(
             <div
               key={i}
               className="h-16 animate-pulse rounded-lg bg-bg-inset"
             />
           ))}
         </div>
+
       </div>
     )
-  }
 
-  if (error) {
+  if (error)
     return (
       <div className="p-6">
+
         <Card className="border-danger/40 bg-danger-soft/20">
+
           <p className="mb-1 text-sm font-medium text-danger">
             Status fetch failed
           </p>
@@ -110,13 +158,13 @@ export default function UptimeRobotDashboard({ integration }) {
           >
             Retry
           </Button>
+
         </Card>
+
       </div>
     )
-  }
 
   const s = data.stats
-
   return (
     <div className="flex h-full flex-col overflow-y-auto">
 
@@ -127,28 +175,33 @@ export default function UptimeRobotDashboard({ integration }) {
         <div className="flex min-w-0 items-center gap-3">
 
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-bg-inset">
-            <Activity
+            <Rocket
               size={18}
               className="text-accent"
             />
           </div>
 
           <div className="min-w-0">
+
             <div className="truncate text-sm font-semibold text-text">
               {integration.display_name}
             </div>
 
             <div className="truncate text-[11px] text-text-faint">
-              UptimeRobot · Monitors & Incidents
+
+              Vercel · Projects & Deployments
 
               {data._cache && (
                 <span>
                   {' '}·{' '}
                   {data._cache.hit
-                    ? `cached ${Math.round(data._cache.age_seconds / 60)}m ago`
+                    ? `cached ${Math.round(
+                        data._cache.age_seconds / 60,
+                      )}m ago`
                     : 'just refreshed'}
                 </span>
               )}
+
             </div>
 
           </div>
@@ -160,19 +213,19 @@ export default function UptimeRobotDashboard({ integration }) {
           <Button
             variant="primary"
             size="sm"
-            className="w-full sm:w-auto"
-            onClick={() => setShowAddMonitor(true)}
+            className="flex-1 sm:flex-none"
+            onClick={() => setShowNewProject(true)}
           >
             <Plus size={14} />
-            Add monitor
+            New Project
           </Button>
 
           <Button
             variant="secondary"
             size="sm"
-            className="w-full sm:w-auto"
-            onClick={() => load({ refresh: true })}
+            className="flex-1 sm:flex-none"
             disabled={loading}
+            onClick={() => load({ refresh: true })}
           >
             <RefreshCw
               size={14}
@@ -190,31 +243,31 @@ export default function UptimeRobotDashboard({ integration }) {
       <div className="grid grid-cols-1 gap-3 border-b border-border px-6 py-4 sm:grid-cols-2 xl:grid-cols-4">
 
         <StatCard
-          label="Total Monitors"
-          value={s.total_monitors}
+          label="Projects"
+          value={s.total_projects}
           tone="neutral"
-          icon={Activity}
+          icon={Rocket}
         />
 
         <StatCard
-          label="Down"
-          value={s.down_count}
-          tone={s.down_count ? 'danger' : 'success'}
-          icon={XCircle}
+          label="Deployments"
+          value={s.deployment_count}
+          tone="neutral"
+          icon={Cloud}
         />
 
         <StatCard
-          label="Paused"
-          value={s.paused_count}
-          tone={s.paused_count ? 'warning' : 'success'}
-          icon={PauseCircle}
-        />
-
-        <StatCard
-          label="Up"
-          value={s.up_count}
+          label="Domains"
+          value={s.domain_count}
           tone="success"
-          icon={CheckCircle2}
+          icon={Globe}
+        />
+
+        <StatCard
+          label="Failed"
+          value={s.failed_count}
+          tone={s.failed_count ? 'danger' : 'success'}
+          icon={Activity}
         />
 
       </div>
@@ -222,12 +275,15 @@ export default function UptimeRobotDashboard({ integration }) {
       {/* Tabs */}
 
       <div className="flex overflow-x-auto border-b border-border px-2 sm:px-6">
+
         {TABS.map((t) => {
+
           const count = t.statKey
             ? data.stats[t.statKey]
-            : (data.recent_incidents || []).length
+            : null
 
           return (
+
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
@@ -237,6 +293,7 @@ export default function UptimeRobotDashboard({ integration }) {
                   : 'border-transparent text-text-faint hover:text-text'
               }`}
             >
+
               {t.label}
 
               {count > 0 && (
@@ -250,37 +307,52 @@ export default function UptimeRobotDashboard({ integration }) {
                   {count}
                 </span>
               )}
+
             </button>
+
           )
+
         })}
+
       </div>
-      {/* Tab Content */}
+
+      {/* Content */}
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {tab === 'recent_incidents' ? (
-          <IncidentList
-            items={data.recent_incidents}
-            emptyMessage={EMPTY_MESSAGE.recent_incidents}
+
+        {tab === 'projects' ? (
+
+          <ProjectList
+            items={data.projects}
+            emptyMessage={EMPTY_MESSAGE.projects}
+            integrationId={integration.id}
+            onChanged={() => load({ refresh: true })}
           />
+
         ) : (
-          <MonitorList
+
+          <DeploymentList
             items={data[tab]}
             emptyMessage={EMPTY_MESSAGE[tab]}
             integrationId={integration.id}
             onChanged={() => load({ refresh: true })}
           />
+
         )}
+
       </div>
 
-      {showAddMonitor && (
-        <MonitorFormDialog
+      {showNewProject && (
+
+        <ProjectFormDialog
           integrationId={integration.id}
-          onClose={() => setShowAddMonitor(false)}
+          onClose={() => setShowNewProject(false)}
           onSaved={() => {
-            setShowAddMonitor(false)
+            setShowNewProject(false)
             load({ refresh: true })
           }}
         />
+
       )}
 
     </div>

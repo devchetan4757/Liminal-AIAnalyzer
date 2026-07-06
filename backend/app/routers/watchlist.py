@@ -7,8 +7,10 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.db.models import Incident
+from app.db.models import Incident, User
 from app.core import llm
+from app.core.deps import get_current_user
+from app.core.ownership import get_owned_integration
 from app.services import remediation
 
 router = APIRouter(
@@ -50,12 +52,22 @@ def _serialize(incident: Incident) -> dict:
 
 
 @router.post("")
-async def add_to_watchlist(req: WatchlistCreateRequest, db: Session = Depends(get_db)):
-    # Dedupe: if an open incident already exists for this exact resource,
-    # just return it instead of creating a duplicate.
+async def add_to_watchlist(
+    req: WatchlistCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Confirms the integration this incident is being raised against
+    # actually belongs to the caller - also doubles as the integration
+    # existence check.
+    get_owned_integration(db, req.integration_id, current_user.id)
+
+    # Dedupe: if an open incident already exists for this exact resource
+    # (within this account), just return it instead of creating a duplicate.
     existing = (
         db.query(Incident)
         .filter(
+            Incident.user_id == current_user.id,
             Incident.integration_id == req.integration_id,
             Incident.external_id == req.external_id,
             Incident.status == "open",
@@ -78,6 +90,7 @@ async def add_to_watchlist(req: WatchlistCreateRequest, db: Session = Depends(ge
     )
 
     incident = Incident(
+        user_id=current_user.id,
         title=req.title,
         severity=req.severity or "medium",
         status="open",
@@ -99,8 +112,15 @@ async def add_to_watchlist(req: WatchlistCreateRequest, db: Session = Depends(ge
 
 
 @router.get("")
-async def list_watchlist(status: Optional[str] = None, db: Session = Depends(get_db)):
-    q = db.query(Incident).filter(Incident.integration_id.isnot(None))
+async def list_watchlist(
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    q = db.query(Incident).filter(
+        Incident.integration_id.isnot(None),
+        Incident.user_id == current_user.id,
+    )
 
     if status:
         q = q.filter(Incident.status == status)
@@ -109,11 +129,24 @@ async def list_watchlist(status: Optional[str] = None, db: Session = Depends(get
     return [_serialize(r) for r in rows]
 
 
-@router.post("/{incident_id}/resolve")
-async def resolve_watchlist_item(incident_id: str, db: Session = Depends(get_db)):
-    incident = db.query(Incident).filter(Incident.id == incident_id).first()
+def _get_owned_incident(incident_id: str, db: Session, user_id: str) -> Incident:
+    incident = (
+        db.query(Incident)
+        .filter(Incident.id == incident_id, Incident.user_id == user_id)
+        .first()
+    )
     if not incident:
         raise HTTPException(status_code=404, detail="Watchlist item not found.")
+    return incident
+
+
+@router.post("/{incident_id}/resolve")
+async def resolve_watchlist_item(
+    incident_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    incident = _get_owned_incident(incident_id, db, current_user.id)
 
     incident.status = "resolved"
     incident.resolved_at = datetime.now(timezone.utc)
@@ -125,10 +158,12 @@ async def resolve_watchlist_item(incident_id: str, db: Session = Depends(get_db)
 
 
 @router.delete("/{incident_id}")
-async def delete_watchlist_item(incident_id: str, db: Session = Depends(get_db)):
-    incident = db.query(Incident).filter(Incident.id == incident_id).first()
-    if not incident:
-        raise HTTPException(status_code=404, detail="Watchlist item not found.")
+async def delete_watchlist_item(
+    incident_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    incident = _get_owned_incident(incident_id, db, current_user.id)
 
     db.delete(incident)
     db.commit()

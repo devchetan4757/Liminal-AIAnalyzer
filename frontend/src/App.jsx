@@ -13,12 +13,22 @@ import Watchlist from "./pages/Watchlist";
 export default function App() {
   const [section, setSection] = useState("manual");
 
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
+    // Full reload so every in-memory query cache / open dashboard state
+    // clears along with the token - the next account to log in on this
+    // browser should never see a trace of the previous one's data.
+    window.location.reload();
+  };
+
   return (
     <ProtectedRoute>
       <div className="flex h-screen w-full bg-bg">
         <Sidebar
           active={section}
           onSelect={setSection}
+          onLogout={handleLogout}
         />
 
         <div className="flex-1 overflow-hidden">

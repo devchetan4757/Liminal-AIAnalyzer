@@ -32,7 +32,62 @@ export function resetSessionId() {
 }
 
 function extractErrorMessage(err) {
-  return err?.response?.data?.detail || err?.message || 'Unknown error'
+  const detail = err?.response?.data?.detail
+
+  if (typeof detail === 'string') return detail
+
+  // FastAPI/Pydantic validation errors (422) come back as an array of
+  // { loc, msg, type } objects, not a string - rendering that array
+  // directly in JSX throws ("Objects are not valid as a React child").
+  // Flatten it into a readable string instead.
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d) => {
+        const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : null
+        return field ? `${field}: ${d.msg}` : d.msg
+      })
+      .join(' · ')
+  }
+
+  return err?.message || 'Unknown error'
+}
+
+// --- Auth ------------------------------------------------------------
+
+export async function login(username, password) {
+  try {
+    const { data } = await api.post('/auth/login', { username, password })
+    localStorage.setItem('token', data.token)
+    localStorage.setItem('username', data.username)
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function register(username, password) {
+  try {
+    const { data } = await api.post('/auth/register', { username, password })
+    localStorage.setItem('token', data.token)
+    localStorage.setItem('username', data.username)
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function getCurrentUser() {
+  try {
+    const { data } = await api.get('/auth/me')
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export function logout() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('username')
 }
 
 export async function sendMessage(text) {
@@ -225,6 +280,28 @@ export async function getRenderStatus(integrationId, { refresh = false } = {}) {
       params: { refresh },
       timeout: 50000,
     })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function getRenderOwners(integrationId) {
+  try {
+    const { data } = await api.get(`/integrations/${integrationId}/render/owners`, { timeout: 15000 })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function createRenderService(integrationId, payload) {
+  try {
+    const { data } = await api.post(
+      `/integrations/${integrationId}/render/services`,
+      payload,
+      { timeout: 35000 },
+    )
     return data
   } catch (err) {
     throw new Error(extractErrorMessage(err))

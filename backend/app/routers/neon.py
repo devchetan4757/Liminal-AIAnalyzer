@@ -5,8 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.db.models import Integration
+from app.db.models import User
 from app.core.encryption import decrypt
+from app.core.deps import get_current_user
+from app.core.ownership import get_owned_integration
 from app.services.integrations.neon.sync import NeonSyncService
 
 router = APIRouter(
@@ -25,29 +27,14 @@ router = APIRouter(
 NEON_CACHE_TTL = timedelta(minutes=15)
 
 
-def _get_neon_integration_or_404(integration_id: str, db: Session) -> Integration:
-    integration = (
-        db.query(Integration)
-        .filter(Integration.id == integration_id)
-        .first()
-    )
-
-    if integration is None:
-        raise HTTPException(status_code=404, detail="Integration not found.")
-
-    if integration.provider != "neon":
-        raise HTTPException(status_code=400, detail="Only available for Neon integrations.")
-
-    return integration
-
-
 @router.get("/{integration_id}/neon/status")
 async def neon_status(
     integration_id: str,
     refresh: bool = False,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    integration = _get_neon_integration_or_404(integration_id, db)
+    integration = get_owned_integration(db, integration_id, current_user.id, provider="neon")
 
     # Serve from cache unless it's missing, stale, or the caller asked to
     # bypass it.

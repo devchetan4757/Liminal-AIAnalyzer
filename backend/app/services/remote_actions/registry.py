@@ -33,6 +33,27 @@ ACTIONS = {
         "resource_type": "service",
         "requires": ["deploy_id"],
     },
+    ("render", "cancel_deploy"): {
+        "label": "Cancel deploy",
+        "consequence": "Cancels an in-progress deploy. The service keeps running its last successful deploy.",
+        "risk_tier": "low",
+        "resource_type": "service",
+        "requires": ["deploy_id"],
+    },
+    ("render", "restart"): {
+        "label": "Restart service",
+        "consequence": "Restarts all running instances on their current deploy (same commit/config). Brief downtime. Not supported for cron jobs.",
+        "risk_tier": "medium",
+        "resource_type": "service",
+        "requires": [],
+    },
+    ("render", "scale"): {
+        "label": "Scale instances",
+        "consequence": "Manually sets the number of running instances (1-100). Ignored while autoscaling is enabled. Billing scales with instance count.",
+        "risk_tier": "medium",
+        "resource_type": "service",
+        "requires": ["num_instances"],
+    },
     ("render", "resume"): {
         "label": "Resume service",
         "consequence": "Resumes a suspended service so it starts serving traffic again.",
@@ -43,6 +64,20 @@ ACTIONS = {
     ("render", "suspend"): {
         "label": "Suspend service",
         "consequence": "Stops the service from serving traffic or running at all, until resumed.",
+        "risk_tier": "high",
+        "resource_type": "service",
+        "requires": [],
+    },
+    ("render", "run_job"): {
+        "label": "Run one-off job",
+        "consequence": "Runs an arbitrary shell command against the service's environment (its own build, not its live traffic). Same power as Render's dashboard \"Run Job\" feature - review the command carefully before confirming.",
+        "risk_tier": "high",
+        "resource_type": "service",
+        "requires": ["start_command"],
+    },
+    ("render", "delete"): {
+        "label": "Delete service",
+        "consequence": "Permanently deletes this service, its deploy history, and its logs. Cannot be undone.",
         "risk_tier": "high",
         "resource_type": "service",
         "requires": [],

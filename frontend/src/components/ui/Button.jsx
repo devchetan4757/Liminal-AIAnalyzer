@@ -12,9 +12,12 @@ const variants = {
 }
 
 const sizes = {
+  xs: 'h-7 px-2 text-xs',
   sm: 'h-8 px-3 text-sm',
   md: 'h-10 px-4 text-sm',
   lg: 'h-12 px-5 text-base',
+  iconXs: 'h-8 w-8 p-0',
+  iconSm: 'h-9 w-9 p-0',
 }
 
 export const Button = forwardRef(function Button(

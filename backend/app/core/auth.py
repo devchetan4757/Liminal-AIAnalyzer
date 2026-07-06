@@ -13,11 +13,16 @@ if not JWT_SECRET:
     raise RuntimeError("JWT_SECRET is not set in environment variables")
 
 
-def create_token():
+def create_token(user_id: str, username: str) -> str:
+    """One token per account. `sub` is the account's own id (not a shared
+    "admin" subject like before) - every route that checks ownership uses
+    this to scope queries to exactly that account's data.
+    """
     payload = {
-        "sub": "admin",
+        "sub": user_id,
+        "username": username,
         "iat": datetime.now(timezone.utc),
-        "exp": datetime.now(timezone.utc) + timedelta(days=1)
+        "exp": datetime.now(timezone.utc) + timedelta(days=1),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=ALGO)
 

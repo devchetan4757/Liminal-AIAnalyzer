@@ -102,6 +102,142 @@ class RenderSyncService:
         self._post(f"/services/{service_id}/resume")
         return {"id": service_id, "suspended": False}
 
+    def restart_service(self, service_id: str):
+        """Restart all running instances on their current deploy (not supported for cron jobs)."""
+        self._post(f"/services/{service_id}/restart")
+        return {"id": service_id, "restarted": True}
+
+    def scale_service(self, service_id: str, num_instances: int):
+        """Manually scale a service to a fixed instance count (1-100). Ignored while autoscaling is enabled."""
+        num_instances = int(num_instances)
+        self._post(f"/services/{service_id}/scale", json_body={"numInstances": num_instances})
+        return {"id": service_id, "num_instances": num_instances}
+
+    def delete_service(self, service_id: str):
+        """Permanently delete a service. Irreversible - mirrors what Render's own dashboard exposes."""
+        response = requests.delete(
+            f"{RENDER_BASE_URL}/services/{service_id}",
+            headers=self.headers,
+            timeout=20,
+        )
+        if response.status_code not in (200, 204):
+            raise Exception(
+                f"Render request to delete service failed ({response.status_code}): {response.text[:200]}"
+            )
+        return {"id": service_id, "deleted": True}
+
+    def run_job(self, service_id: str, start_command: str):
+        """Run a one-off job on the service using the given shell command."""
+        job = self._post(
+            f"/services/{service_id}/jobs",
+            json_body={"startCommand": start_command},
+        )
+        job = _unwrap(job, "job")
+        return {
+            "id": job.get("id"),
+            "status": job.get("status"),
+            "start_command": start_command,
+        }
+
+    # -------------------------------------------------------------
+    # Create (settings-form operation, not a one-click remote action -
+    # same split UptimeRobotSyncService draws between create_monitor
+    # and pause/resume/reset/delete). Lives here rather than in
+    # remote_actions because it needs a multi-field form, not a confirm
+    # dialog.
+    # -------------------------------------------------------------
+
+    def owners(self, limit: int = 100):
+        """List workspaces/accounts this API key can create services under."""
+        data = self._get("/owners", params={"limit": limit})
+
+        results = []
+        for item in data:
+            owner = _unwrap(item, "owner")
+            results.append({
+                "id": owner.get("id"),
+                "name": owner.get("name"),
+                "email": owner.get("email"),
+                "type": owner.get("type"),
+            })
+
+        return results
+
+    def create_service(self, payload: dict):
+        """
+        Create a new service. `payload` is the simplified shape the
+        frontend form sends (see ServiceFormDialog.jsx) - this method
+        maps it onto Render's actual nested create-service body.
+
+        Covers the common git-deploy and Docker/image cases directly.
+        For anything unusual (less common runtime fields, workflow-only
+        options, etc.), `payload["advanced_config"]` is merged directly
+        into serviceDetails last, so it always wins - same escape hatch
+        UptimeRobotSyncService uses for monitor config.
+        """
+        service_type = payload["type"]
+        runtime = payload.get("runtime")
+
+        service_details = {
+            "region": payload.get("region") or "oregon",
+            "plan": payload.get("plan") or "starter",
+        }
+
+        if service_type == "static_site":
+            service_details["buildCommand"] = payload.get("build_command") or ""
+            service_details["publishPath"] = payload.get("publish_path") or "."
+        else:
+            service_details["runtime"] = runtime
+            service_details["numInstances"] = int(payload.get("num_instances") or 1)
+
+            if runtime == "image":
+                service_details["image"] = {"imagePath": payload.get("image_url")}
+            elif runtime == "docker":
+                service_details["envSpecificDetails"] = {
+                    "dockerfilePath": payload.get("dockerfile_path") or "./Dockerfile",
+                    "dockerContext": payload.get("docker_context") or ".",
+                }
+            else:
+                service_details["envSpecificDetails"] = {
+                    "buildCommand": payload.get("build_command") or "",
+                    "startCommand": payload.get("start_command") or "",
+                }
+
+            if service_type == "cron_job" and payload.get("schedule"):
+                service_details["schedule"] = payload["schedule"]
+
+            if payload.get("pull_request_previews") is not None:
+                service_details["pullRequestPreviewsEnabled"] = (
+                    "yes" if payload["pull_request_previews"] else "no"
+                )
+
+        if payload.get("advanced_config"):
+            service_details.update(payload["advanced_config"])
+
+        body = {
+            "type": service_type,
+            "name": payload["name"],
+            "ownerId": payload["owner_id"],
+            "autoDeploy": "yes" if payload.get("auto_deploy", True) else "no",
+            "serviceDetails": service_details,
+        }
+
+        if runtime != "image":
+            body["repo"] = payload.get("repo")
+            if payload.get("branch"):
+                body["branch"] = payload["branch"]
+            if payload.get("root_dir"):
+                body["rootDir"] = payload["root_dir"]
+
+        svc = self._post("/services", json_body=body)
+        svc = _unwrap(svc, "service")
+        return {
+            "id": svc.get("id"),
+            "name": svc.get("name"),
+            "type": svc.get("type"),
+            "url": (svc.get("serviceDetails") or {}).get("url"),
+        }
+
     def services(self, limit: int = 100):
         """
         List services owned/accessible by this API key. Read-only

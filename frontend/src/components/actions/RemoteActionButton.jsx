@@ -50,10 +50,11 @@ export function RemoteActionButton({
   resourceId,
   resourceName,
   extra = {},
+  fields,
   triggeredBy = 'manual',
   incidentId,
   variant = 'secondary',
-  size = 'sm',
+  size = 'iconXs',
   icon: Icon,
   onDone,
   disabled,
@@ -65,7 +66,7 @@ export function RemoteActionButton({
 
   if (!meta) return null // action not in registry (or not loaded yet) - render nothing
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (fieldValues = {}) => {
     setBusy(true)
     setError('')
     try {
@@ -77,7 +78,7 @@ export function RemoteActionButton({
         resource_name: resourceName,
         triggered_by: triggeredBy,
         incident_id: incidentId,
-        extra,
+        extra: { ...extra, ...fieldValues },
       })
       if (row.status === 'failed') {
         setError(row.result?.error || 'Action failed.')
@@ -94,16 +95,16 @@ export function RemoteActionButton({
 
   return (
     <>
-      <Button
-        variant={variant}
-        size={size}
-        disabled={disabled}
-        onClick={() => setOpen(true)}
-        title={meta.consequence}
-      >
-        {Icon && <Icon size={12} />}
-        {meta.label}
-      </Button>
+    <Button
+  variant={variant}
+  size={size}
+  disabled={disabled}
+  onClick={() => setOpen(true)}
+  title={meta.label}
+>
+  {Icon && <Icon className="size-4" />}
+</Button>
+
 
       {open && (
         <ConfirmActionDialog
@@ -111,6 +112,7 @@ export function RemoteActionButton({
           consequence={meta.consequence}
           riskTier={meta.risk_tier}
           resourceName={resourceName}
+          fields={fields}
           busy={busy}
           error={error}
           onCancel={() => { setOpen(false); setError('') }}

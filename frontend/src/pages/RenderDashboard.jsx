@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw, Cloud, XCircle, PauseCircle, Server } from 'lucide-react'
+import { RefreshCw, Cloud, XCircle, PauseCircle, Server, Plus } from 'lucide-react'
 import { getRenderStatus } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { DeployList, ServiceList } from '../components/render/DeployTabs'
+import { ServiceFormDialog } from '../components/render/ServiceFormDialog'
 
 const TABS = [
   { key: 'services',           label: 'Services',           statKey: 'total_services' },
@@ -41,6 +42,7 @@ export default function RenderDashboard({ integration }) {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
   const [tab, setTab]         = useState('services')
+  const [showNewService, setShowNewService] = useState(false)
 
   const load = async (opts) => {
     setLoading(true)
@@ -109,10 +111,16 @@ export default function RenderDashboard({ integration }) {
             </div>
           </div>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => load({ refresh: true })} disabled={loading}>
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="primary" size="sm" onClick={() => setShowNewService(true)}>
+            <Plus size={14} />
+            New service
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => load({ refresh: true })} disabled={loading}>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* stats row */}
@@ -169,6 +177,17 @@ export default function RenderDashboard({ integration }) {
             />
         }
       </div>
+
+      {showNewService && (
+        <ServiceFormDialog
+          integrationId={integration.id}
+          onClose={() => setShowNewService(false)}
+          onSaved={() => {
+            setShowNewService(false)
+            load({ refresh: true })
+          }}
+        />
+      )}
 
     </div>
   )

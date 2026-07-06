@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
 from app.db.session import get_db
-from app.db.models import Analysis
-from app.core.deps import auth_guard
+from app.db.models import Analysis, User
+from app.core.deps import get_current_user
 
 router = APIRouter()
 
@@ -13,15 +13,16 @@ router = APIRouter()
 @router.get("")
 async def list_history(
     db: Session = Depends(get_db),
-    user=Depends(auth_guard),
+    current_user: User = Depends(get_current_user),
     limit: int = Query(default=50, le=200),
     verdict: Optional[str] = None,
     indicator_type: Optional[str] = None,
 ):
-    """Recent analyses, newest first. Filter by verdict/indicator_type optionally.
-    This is the data source for both a future history page and the dashboard.
+    """Recent analyses for THIS account only, newest first. Filter by
+    verdict/indicator_type optionally. This is the data source for both
+    the history page and the dashboard.
     """
-    q = db.query(Analysis)
+    q = db.query(Analysis).filter(Analysis.user_id == current_user.id)
 
     if verdict:
         q = q.filter(Analysis.verdict == verdict)
@@ -45,18 +46,27 @@ async def list_history(
     ]
 
 
+def _get_owned_analysis(analysis_id: str, db: Session, user_id: str) -> Analysis:
+    row = (
+        db.query(Analysis)
+        .filter(Analysis.id == analysis_id, Analysis.user_id == user_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    return row
+
+
 @router.get("/{analysis_id}")
 async def get_analysis(
     analysis_id: str,
     db: Session = Depends(get_db),
-    user=Depends(auth_guard),
+    current_user: User = Depends(get_current_user),
 ):
     """Full record including raw payload -- used when someone clicks into
     a history item to see the complete original analysis again.
     """
-    row = db.query(Analysis).filter(Analysis.id == analysis_id).first()
-    if not row:
-        return {"error": "not found"}
+    row = _get_owned_analysis(analysis_id, db, current_user.id)
 
     return {
         "id": row.id,
@@ -77,12 +87,10 @@ async def get_analysis(
 async def delete_analysis(
     analysis_id: str,
     db: Session = Depends(get_db),
-    user=Depends(auth_guard),
+    current_user: User = Depends(get_current_user),
 ):
     """Permanently delete a single history entry."""
-    row = db.query(Analysis).filter(Analysis.id == analysis_id).first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Analysis not found")
+    row = _get_owned_analysis(analysis_id, db, current_user.id)
 
     db.delete(row)
     db.commit()

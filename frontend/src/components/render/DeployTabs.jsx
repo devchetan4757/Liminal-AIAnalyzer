@@ -1,4 +1,4 @@
-import { ExternalLink, CheckCircle2, XCircle, PauseCircle, Cloud, GitCommit, RotateCw } from 'lucide-react'
+import { ExternalLink, CheckCircle2, XCircle, PauseCircle, PlayCircle, Cloud, GitCommit, RotateCw, Ban, Layers, Terminal, Trash2 } from 'lucide-react'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { AddToWatchlistButton } from '../watchlist/AddToWatchlistButton'
@@ -17,6 +17,11 @@ const STATUS_TONE = {
   queued: 'neutral',
   created: 'neutral',
 }
+
+// Deploys still running - cancel only makes sense while one of these.
+const IN_PROGRESS_STATUSES = new Set([
+  'build_in_progress', 'update_in_progress', 'pre_deploy_in_progress', 'deploying', 'queued', 'created',
+])
 
 function timeAgo(iso) {
   if (!iso) return '—'
@@ -54,6 +59,7 @@ export function DeployList({ items, emptyMessage, integrationId, allowRollback, 
       {items.map((item) => {
         const tone = STATUS_TONE[item.status] || 'neutral'
         const rollbackTarget = allowRollback && integrationId ? findRollbackTarget(item, allDeploys) : null
+        const cancellable = integrationId && IN_PROGRESS_STATUSES.has(item.status)
 
         return (
           <Card key={item.id} className={tone === 'danger' ? 'border-danger/40 bg-danger-soft/20' : undefined}>
@@ -78,6 +84,18 @@ export function DeployList({ items, emptyMessage, integrationId, allowRollback, 
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {cancellable && (
+                  <RemoteActionButton
+                    integrationId={integrationId}
+                    provider="render"
+                    action="cancel_deploy"
+                    resourceId={item.service_id}
+                    resourceName={item.service_name}
+                    extra={{ deploy_id: item.id }}
+                    icon={Ban}
+                    onDone={onChanged}
+                  />
+                )}
                 {rollbackTarget && (
                   <RemoteActionButton
                     integrationId={integrationId}
@@ -155,6 +173,41 @@ export function ServiceList({ items, emptyMessage, integrationId, onChanged }) {
                     onDone={onChanged}
                   />
                 )}
+                {integrationId && !suspended && (
+                  <RemoteActionButton
+                    integrationId={integrationId}
+                    provider="render"
+                    action="restart"
+                    resourceId={svc.id}
+                    resourceName={svc.name}
+                    icon={RotateCw}
+                    onDone={onChanged}
+                  />
+                )}
+                {integrationId && !suspended && (
+                  <RemoteActionButton
+                    integrationId={integrationId}
+                    provider="render"
+                    action="scale"
+                    resourceId={svc.id}
+                    resourceName={svc.name}
+                    icon={Layers}
+                    fields={[{ key: 'num_instances', label: 'Number of instances (1-100)', type: 'number', min: 1, max: 100, placeholder: 'e.g. 2' }]}
+                    onDone={onChanged}
+                  />
+                )}
+                {integrationId && !suspended && (
+                  <RemoteActionButton
+                    integrationId={integrationId}
+                    provider="render"
+                    action="run_job"
+                    resourceId={svc.id}
+                    resourceName={svc.name}
+                    icon={Terminal}
+                    fields={[{ key: 'start_command', label: 'Shell command to run', type: 'text', placeholder: 'e.g. python manage.py migrate' }]}
+                    onDone={onChanged}
+                  />
+                )}
                 {integrationId && (
                   <RemoteActionButton
                     integrationId={integrationId}
@@ -163,7 +216,19 @@ export function ServiceList({ items, emptyMessage, integrationId, onChanged }) {
                     resourceId={svc.id}
                     resourceName={svc.name}
                     variant={suspended ? 'secondary' : 'danger'}
-                    icon={PauseCircle}
+                    icon={suspended ? PlayCircle : PauseCircle}
+                    onDone={onChanged}
+                  />
+                )}
+                {integrationId && (
+                  <RemoteActionButton
+                    integrationId={integrationId}
+                    provider="render"
+                    action="delete"
+                    resourceId={svc.id}
+                    resourceName={svc.name}
+                    variant="danger"
+                    icon={Trash2}
                     onDone={onChanged}
                   />
                 )}

@@ -7,8 +7,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.db.models import Integration
+from app.db.models import Integration, User
 from app.core.encryption import decrypt
+from app.core.deps import get_current_user
+from app.core.ownership import get_owned_integration
 from app.services.integrations.uptimerobot.sync import UptimeRobotSyncService
 
 router = APIRouter(
@@ -47,22 +49,6 @@ class MonitorConfigRequest(BaseModel):
     advanced_config: Optional[dict] = None
 
 
-def _get_uptimerobot_integration_or_404(integration_id: str, db: Session) -> Integration:
-    integration = (
-        db.query(Integration)
-        .filter(Integration.id == integration_id)
-        .first()
-    )
-
-    if integration is None:
-        raise HTTPException(status_code=404, detail="Integration not found.")
-
-    if integration.provider != "uptimerobot":
-        raise HTTPException(status_code=400, detail="Only available for UptimeRobot integrations.")
-
-    return integration
-
-
 def _service_for(integration: Integration) -> UptimeRobotSyncService:
     api_key = decrypt(integration.encrypted_credentials["api_key"])
     return UptimeRobotSyncService(api_key)
@@ -73,8 +59,9 @@ async def uptimerobot_status(
     integration_id: str,
     refresh: bool = False,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    integration = _get_uptimerobot_integration_or_404(integration_id, db)
+    integration = get_owned_integration(db, integration_id, current_user.id, provider="uptimerobot")
 
     if not refresh and integration.cached_scan and integration.cached_scan_at:
         cached_at = integration.cached_scan_at
@@ -123,9 +110,10 @@ async def uptimerobot_get_monitor(
     integration_id: str,
     monitor_id: str,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Full monitor config, used to pre-fill the edit form."""
-    integration = _get_uptimerobot_integration_or_404(integration_id, db)
+    integration = get_owned_integration(db, integration_id, current_user.id, provider="uptimerobot")
 
     try:
         service = _service_for(integration)
@@ -146,8 +134,9 @@ async def uptimerobot_create_monitor(
     integration_id: str,
     req: MonitorConfigRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    integration = _get_uptimerobot_integration_or_404(integration_id, db)
+    integration = get_owned_integration(db, integration_id, current_user.id, provider="uptimerobot")
 
     try:
         service = _service_for(integration)
@@ -174,8 +163,9 @@ async def uptimerobot_update_monitor(
     monitor_id: str,
     req: MonitorConfigRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    integration = _get_uptimerobot_integration_or_404(integration_id, db)
+    integration = get_owned_integration(db, integration_id, current_user.id, provider="uptimerobot")
 
     try:
         service = _service_for(integration)

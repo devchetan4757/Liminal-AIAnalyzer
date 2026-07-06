@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Plus, X, Github, Database, Cloud, Activity, Plug, Trash2, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Plus, X, Github, Database, Cloud, Activity, Plug, Trash2, RefreshCw, CheckCircle2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getIntegrations, createIntegration, syncIntegration, deleteIntegration } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
+import { useResizablePanel } from '../hooks/useResizablePanel'
 import GitHubDashboard from './GitHubDashboard'
 import MongoDBDashboard from './MongoDBDashboard'
 import RenderDashboard from './RenderDashboard'
@@ -28,6 +29,7 @@ const PROVIDERS = [
     key: 'github',
     label: 'GitHub',
     icon: Github,
+    category: 'Source Control',
     authType: 'token',
     namePlaceholder: 'e.g. My GitHub',
     fields: [
@@ -51,6 +53,7 @@ const PROVIDERS = [
     key: 'render',
     label: 'Render',
     icon: Cloud,
+    category: 'Web Hosting',
     authType: 'api_key',
     namePlaceholder: 'e.g. Production Render',
     fields: [
@@ -68,6 +71,7 @@ const PROVIDERS = [
     key: 'uptimerobot',
     label: 'UptimeRobot',
     icon: Activity,
+    category: 'Monitoring',
     authType: 'api_key',
     namePlaceholder: 'e.g. Production Monitors',
     fields: [
@@ -91,6 +95,7 @@ const PROVIDERS = [
     key: 'neon',
     label: 'Neon',
     icon: Database,
+    category: 'Databases',
     authType: 'api_key',
     namePlaceholder: 'e.g. Production Neon',
     fields: [
@@ -108,6 +113,7 @@ const PROVIDERS = [
     key: 'mongodb',
     label: 'MongoDB Atlas',
     icon: Database,
+    category: 'Databases',
     authType: 'api_key_pair',
     namePlaceholder: 'e.g. Production Atlas',
     fields: [
@@ -142,6 +148,36 @@ const PROVIDERS = [
     ),
   },
 ]
+
+// Display order for category groupings, used by both the connect-modal
+// picker and the connected-apps list. A provider whose category isn't
+// listed here (e.g. added without updating this) just sorts to the end
+// under its own heading instead of disappearing.
+const CATEGORY_ORDER = ['Source Control', 'Web Hosting', 'Databases', 'Monitoring']
+
+function categoryForProvider(providerKey) {
+  return PROVIDERS.find(p => p.key === providerKey)?.category || 'Other'
+}
+
+// Buckets `items` by category (via `getCategory`) and returns
+// [category, items][] sorted per CATEGORY_ORDER, preserving each
+// group's original relative item order.
+function groupByCategory(items, getCategory) {
+  const groups = new Map()
+  for (const item of items) {
+    const cat = getCategory(item) || 'Other'
+    if (!groups.has(cat)) groups.set(cat, [])
+    groups.get(cat).push(item)
+  }
+  return [...groups.entries()].sort(([a], [b]) => {
+    const ia = CATEGORY_ORDER.indexOf(a)
+    const ib = CATEGORY_ORDER.indexOf(b)
+    if (ia === -1 && ib === -1) return a.localeCompare(b)
+    if (ia === -1) return 1
+    if (ib === -1) return -1
+    return ia - ib
+  })
+}
 
 function timeAgo(iso) {
   if (!iso) return 'Never synced'
@@ -203,26 +239,37 @@ function ConnectModal({ onClose, onConnected }) {
 
         <h2 className="mb-3 text-base font-semibold text-text">Connect an app</h2>
 
-        {/* provider grid — wraps neatly instead of a cramped single-line row */}
-        <div className="mb-5 grid grid-cols-3 gap-2">
-          {PROVIDERS.map(p => {
-            const Icon = p.icon
-            const active = p.key === providerKey
-            return (
-              <button
-                key={p.key}
-                onClick={() => setProviderKey(p.key)}
-                className={`flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-center transition-colors ${
-                  active
-                    ? 'border-accent bg-accent-soft text-accent'
-                    : 'border-border text-text-faint hover:border-accent/40 hover:text-text'
-                }`}
-              >
-                <Icon size={18} />
-                <span className="text-[11px] font-medium leading-tight">{p.label}</span>
-              </button>
-            )
-          })}
+        {/* provider picker — grouped by category instead of one flat grid,
+            so it reads as "here's what kind of thing you're connecting"
+            rather than an arbitrary list */}
+        <div className="mb-5">
+          {groupByCategory(PROVIDERS, p => p.category).map(([category, items]) => (
+            <div key={category} className="mb-3 last:mb-0">
+              <div className="mb-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-wider text-text-faint">
+                {category}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {items.map(p => {
+                  const Icon = p.icon
+                  const active = p.key === providerKey
+                  return (
+                    <button
+                      key={p.key}
+                      onClick={() => setProviderKey(p.key)}
+                      className={`flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-center transition-colors ${
+                        active
+                          ? 'border-accent bg-accent-soft text-accent'
+                          : 'border-border text-text-faint hover:border-accent/40 hover:text-text'
+                      }`}
+                    >
+                      <Icon size={18} />
+                      <span className="text-[11px] font-medium leading-tight">{p.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
         <div className="mb-4 flex items-center gap-2 border-t border-border pt-4">
@@ -279,7 +326,7 @@ function ConnectModal({ onClose, onConnected }) {
 }
 
 
-function IntegrationRow({ integration, active, onSelect, onDelete, onSync }) {
+function IntegrationRow({ integration, active, collapsed, onSelect, onDelete, onSync }) {
   const [syncing, setSyncing] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -294,6 +341,23 @@ function IntegrationRow({ integration, active, onSelect, onDelete, onSync }) {
     if (!confirm(`Disconnect ${integration.display_name}? This removes all synced data.`)) return
     setDeleting(true)
     try { await onDelete(integration.id) } finally { setDeleting(false) }
+  }
+
+  if (collapsed) {
+    const Icon = PROVIDER_ICON[integration.provider] || Plug
+    return (
+      <button
+        onClick={() => onSelect(integration)}
+        title={integration.display_name}
+        className={`flex w-full items-center justify-center rounded-lg border p-2.5 transition-colors ${
+          active
+            ? 'border-accent bg-accent-soft text-accent'
+            : 'border-border bg-bg-raised text-text-dim hover:border-accent/40'
+        }`}
+      >
+        <Icon size={16} />
+      </button>
+    )
   }
 
   return (
@@ -383,32 +447,74 @@ export default function ConnectedApps() {
     load()
   }
 
+  const {
+    collapsed: panelCollapsed,
+    width: panelWidth,
+    toggleCollapsed: togglePanelCollapsed,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+    handleTouchStart,
+    handleTouchEnd,
+  } = useResizablePanel({
+    storageKey: 'connectedApps',
+    defaultWidth: 288, // matches the old fixed w-72
+    minWidth: 220,
+    maxWidth: 420,
+    collapsedWidth: 64,
+    collapseSnapThreshold: 140,
+  })
+
   return (
     <div className="flex h-full">
 
-      {/* left panel */}
-      <div className="flex w-72 shrink-0 flex-col border-r border-border bg-bg-raised">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Plug size={15} className="text-accent" />
-            <span className="text-sm font-semibold text-text">Connected Apps</span>
-          </div>
-          <Button size="sm" onClick={() => setShowModal(true)}>
-            <Plus size={14} />
-            Connect
-          </Button>
+      {/* left panel - swipe left/right to collapse/expand, or drag the
+          right edge to resize. Same behavior as the main nav sidebar. */}
+      <div
+        style={{ width: panelWidth }}
+        className="relative flex shrink-0 flex-col border-r border-border bg-bg-raised transition-[width] duration-150 ease-out"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className={`flex items-center border-b border-border px-4 py-3 ${panelCollapsed ? 'justify-center px-2' : 'justify-between'}`}>
+          {panelCollapsed ? (
+            <Plug size={16} className="text-accent" />
+          ) : (
+            <div className="flex items-center gap-2">
+              <Plug size={15} className="text-accent" />
+              <span className="text-sm font-semibold text-text">Connected Apps</span>
+            </div>
+          )}
+          {!panelCollapsed && (
+            <Button size="sm" onClick={() => setShowModal(true)}>
+              <Plus size={14} />
+              Connect
+            </Button>
+          )}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3">
+        {panelCollapsed && (
+          <div className="flex justify-center border-b border-border py-2">
+            <button
+              onClick={() => setShowModal(true)}
+              title="Connect an app"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-text-dim hover:bg-bg-inset hover:text-accent transition-colors"
+            >
+              <Plus size={16} />
+            </button>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3">
           {loading && (
             <div className="flex flex-col gap-2">
               {[1,2].map(i => (
-                <div key={i} className="h-24 animate-pulse rounded-lg bg-bg-inset" />
+                <div key={i} className={`animate-pulse rounded-lg bg-bg-inset ${panelCollapsed ? 'h-9' : 'h-24'}`} />
               ))}
             </div>
           )}
 
-          {!loading && integrations.length === 0 && (
+          {!loading && integrations.length === 0 && !panelCollapsed && (
             <div className="mt-8 px-2 text-center">
               <Github size={28} className="mx-auto mb-3 text-text-faint" />
               <p className="text-sm font-medium text-text">No apps connected</p>
@@ -418,19 +524,50 @@ export default function ConnectedApps() {
             </div>
           )}
 
-          <div className="flex flex-col gap-2">
-            {integrations.map(integration => (
-              <IntegrationRow
-                key={integration.id}
-                integration={integration}
-                active={selected?.id === integration.id}
-                onSelect={setSelected}
-                onDelete={handleDelete}
-                onSync={handleSync}
-              />
+          <div className="flex flex-col gap-4">
+            {groupByCategory(integrations, (i) => categoryForProvider(i.provider)).map(([category, items]) => (
+              <div key={category}>
+                {!panelCollapsed && (
+                  <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-text-faint">
+                    {category}
+                  </div>
+                )}
+                <div className="flex flex-col gap-2">
+                  {items.map(integration => (
+                    <IntegrationRow
+                      key={integration.id}
+                      integration={integration}
+                      active={selected?.id === integration.id}
+                      collapsed={panelCollapsed}
+                      onSelect={setSelected}
+                      onDelete={handleDelete}
+                      onSync={handleSync}
+                    />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
+
+        {/* Collapse/expand toggle for click users */}
+        <button
+          onClick={togglePanelCollapsed}
+          title={panelCollapsed ? 'Expand panel' : 'Collapse panel'}
+          className="absolute top-1/2 -right-3 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-bg-raised text-text-faint shadow-glow transition-colors hover:text-accent"
+        >
+          {panelCollapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+        </button>
+
+        {/* Drag-to-resize handle */}
+        {!panelCollapsed && (
+          <div
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            className="absolute top-0 -right-1 h-full w-2 cursor-col-resize touch-none"
+          />
+        )}
       </div>
 
       {/* right panel */}

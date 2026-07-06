@@ -7,28 +7,61 @@ import { Button } from '../components/ui/Button'
 
 const api = axios.create({ baseURL: '/api' })
 
+// FastAPI returns two different shapes under `detail`:
+//   - a plain string, for HTTPException(detail="...") (e.g. wrong password)
+//   - an array of { loc, msg, type } objects, for Pydantic validation
+//     errors (e.g. password too short) - happens BEFORE the request ever
+//     reaches our handler.
+// Rendering the array directly as a React child throws ("Objects are not
+// valid as a React child"), which is what looked like a crash. Flatten
+// both shapes into a plain string here instead.
+function extractErrorMessage(err) {
+  const detail = err?.response?.data?.detail
+
+  if (typeof detail === 'string') return detail
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d) => {
+        const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : null
+        return field ? `${field}: ${d.msg}` : d.msg
+      })
+      .join(' · ')
+  }
+
+  return err?.message || 'Something went wrong.'
+}
+
 export default function Login({ onLogin }) {
+  const [mode, setMode] = useState('login') // 'login' | 'register'
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const isRegister = mode === 'register'
+
   const submit = async () => {
-    if (!password || loading) return
+    if (!username || !password || loading) return
     setLoading(true)
     setError('')
 
     try {
-      const { data } = await api.post('/auth/login', { password })
+      const { data } = await api.post(
+        isRegister ? '/auth/register' : '/auth/login',
+        { username: username.trim(), password },
+      )
 
       if (!data.token) {
-        setError('Wrong password')
+        setError('Something went wrong - no token returned.')
         return
       }
 
       localStorage.setItem('token', data.token)
+      localStorage.setItem('username', data.username)
       onLogin(data.token)
     } catch (err) {
-      setError('Login failed')
+      setError(extractErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -47,18 +80,37 @@ export default function Login({ onLogin }) {
         </div>
 
         <p className="mb-5 text-sm text-text-dim">
-          Enter access key to continue
+          {isRegister
+            ? 'Create an account to get your own private workspace'
+            : 'Sign in to your account'}
         </p>
+
+        <Input
+          type="text"
+          placeholder="Username"
+          value={username}
+          autoFocus
+          autoComplete="username"
+          maxLength={64}
+          onChange={(e) => setUsername(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="mb-2"
+        />
 
         <Input
           type="password"
           placeholder="Password"
           value={password}
-          autoFocus
+          autoComplete={isRegister ? 'new-password' : 'current-password'}
+          maxLength={256}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={handleKeyDown}
           className="mb-2"
         />
+
+        {isRegister && (
+          <p className="mb-2 text-[11px] text-text-faint">At least 8 characters.</p>
+        )}
 
         {error && (
           <p className="mb-2 text-xs text-danger">{error}</p>
@@ -66,11 +118,21 @@ export default function Login({ onLogin }) {
 
         <Button
           onClick={submit}
-          disabled={!password || loading}
+          disabled={!username || !password || loading}
           className="mt-2 w-full"
         >
-          {loading ? 'Checking…' : 'Login'}
+          {loading ? 'Please wait…' : isRegister ? 'Create account' : 'Log in'}
         </Button>
+
+        <button
+          type="button"
+          onClick={() => { setMode(isRegister ? 'login' : 'register'); setError('') }}
+          className="mt-3 w-full text-center text-xs text-text-faint hover:text-accent transition-colors"
+        >
+          {isRegister
+            ? 'Already have an account? Log in'
+            : "Don't have an account? Sign up"}
+        </button>
       </Card>
     </div>
   )

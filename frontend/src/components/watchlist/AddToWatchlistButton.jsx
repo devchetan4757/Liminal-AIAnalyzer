@@ -21,19 +21,11 @@ export function AddToWatchlistButton({
 }) {
   const [state, setState] = useState('idle') // idle | loading | added | error
 
-  if (state === 'added') {
-    return (
-      <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium text-accent ${className}`}>
-        <Eye size={12} />
-        Watching
-      </span>
-    )
-  }
-
   const handleClick = async (e) => {
     e.stopPropagation()
     e.preventDefault()
     setState('loading')
+
     try {
       await addToWatchlist({
         integration_id: integrationId,
@@ -45,6 +37,7 @@ export function AddToWatchlistButton({
         severity,
         raw: raw || {},
       })
+
       setState('added')
     } catch (err) {
       console.error('Failed to add to watchlist:', err)
@@ -55,18 +48,27 @@ export function AddToWatchlistButton({
   return (
     <button
       onClick={handleClick}
-      disabled={state === 'loading'}
-      title="Add to Watchlist"
-      className={`inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-text-dim transition-colors hover:border-accent/50 hover:text-accent disabled:opacity-50 ${className}`}
+      disabled={state === 'loading' || state === 'added'}
+      title={
+        state === 'added'
+          ? 'Watching'
+          : state === 'error'
+            ? 'Retry adding to Watchlist'
+            : 'Add to Watchlist'
+      }
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors disabled:opacity-60 ${
+        state === 'added'
+          ? 'border-accent/50 bg-bg-raised text-accent'
+          : 'border-border bg-bg-raised text-text-dim hover:border-accent/50 hover:text-accent'
+      } ${className}`}
     >
       {state === 'loading' ? (
-        <Loader2 size={12} className="animate-spin" />
+        <Loader2 className="size-4 animate-spin" />
       ) : state === 'error' ? (
-        <EyeOff size={12} />
+        <EyeOff className="size-4" />
       ) : (
-        <Eye size={12} />
+        <Eye className="size-4" />
       )}
-      {state === 'error' ? 'Retry' : 'Add to Watchlist'}
     </button>
   )
 }

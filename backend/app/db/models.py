@@ -24,6 +24,31 @@ def _now():
 
 
 # ==========================================================
+# Users
+# ==========================================================
+# Every account-owned row below (Integration, Analysis, Incident) carries
+# a user_id so one account can never see or touch another's data. There
+# is no shared/admin view - ownership is the only access control.
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=_uuid)
+
+    username = Column(String, nullable=False, unique=True, index=True)
+
+    # PBKDF2-HMAC-SHA256 hash, "pbkdf2_sha256$<iterations>$<salt_hex>$<hash_hex>" -
+    # see app/core/security.py. Never a plaintext or reversibly-encrypted password.
+    hashed_password = Column(String, nullable=False)
+
+    created_at = Column(DateTime, default=_now)
+
+    integrations = relationship("Integration", back_populates="owner", cascade="all, delete")
+    analyses = relationship("Analysis", back_populates="owner", cascade="all, delete")
+    incidents = relationship("Incident", back_populates="owner", cascade="all, delete")
+
+
+# ==========================================================
 # Existing Models
 # ==========================================================
 
@@ -45,6 +70,12 @@ class Analysis(Base):
     raw = Column(JSON, nullable=True)
 
     session_id = Column(String, index=True, nullable=True)
+
+    # Nullable so any pre-existing rows from before accounts existed don't
+    # break, but every row created going forward always sets this - see
+    # save_analysis() in app/db/crud.py.
+    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
+    owner = relationship("User", back_populates="analyses")
 
     case_id = Column(String, ForeignKey("cases.id"), nullable=True)
     case = relationship("Case", back_populates="analyses")
@@ -72,6 +103,13 @@ class Integration(Base):
     __tablename__ = "integrations"
 
     id = Column(String, primary_key=True, default=_uuid)
+
+    # Nullable only so a pre-account SQLite file doesn't hard-crash on
+    # startup - every route that reads/writes integrations requires and
+    # filters on this, so a null-owner row is simply unreachable by
+    # anyone. New rows always set it (see routers/integrations.py).
+    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
+    owner = relationship("User", back_populates="integrations")
 
     provider = Column(String, nullable=False, index=True)
 
@@ -190,6 +228,12 @@ class Incident(Base):
     # this table was unused -- and any manually-created incidents) stay
     # valid.
     integration_id = Column(String, ForeignKey("integrations.id"), nullable=True)
+
+    # Set from the integration's owner at creation time (see
+    # routers/watchlist.py) - kept as its own column rather than only
+    # inferred via integration_id so ownership checks don't need a join.
+    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
+    owner = relationship("User", back_populates="incidents")
 
     provider = Column(String, nullable=True)  # render / neon / uptimerobot / github / mongodb
 

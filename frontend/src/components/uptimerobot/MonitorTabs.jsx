@@ -46,8 +46,8 @@ export function MonitorList({ items, emptyMessage, integrationId, onChanged }) {
         const paused = m.status === 'paused'
         return (
           <Card key={m.id} className={tone === 'danger' ? 'border-danger/40 bg-danger-soft/20' : undefined}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
                   <Badge tone={tone}>
                     {tone === 'danger' ? <XCircle size={11} /> : tone === 'warning' ? <PauseCircle size={11} /> : <CheckCircle2 size={11} />}
@@ -62,7 +62,7 @@ export function MonitorList({ items, emptyMessage, integrationId, onChanged }) {
                   <p className="text-[11px] text-text-faint truncate">{m.url}</p>
                 )}
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1 self-start xl:self-auto xl:justify-end w-full xl:w-auto">
                 {tone === 'danger' && integrationId && (
                   <AddToWatchlistButton
                     integrationId={integrationId}
@@ -78,12 +78,12 @@ export function MonitorList({ items, emptyMessage, integrationId, onChanged }) {
                 {integrationId && (
                   <Button
                     variant="secondary"
-                    size="sm"
+                    size="iconXs"
+                    className="shrink-0"
                     onClick={() => setEditingId(m.id)}
                     title="Edit monitor config"
                   >
-                    <Pencil size={12} />
-                    Edit
+                    <Pencil className="size-3.5" />
                   </Button>
                 )}
                 {integrationId && (
@@ -94,6 +94,7 @@ export function MonitorList({ items, emptyMessage, integrationId, onChanged }) {
                     resourceId={String(m.id)}
                     resourceName={m.name}
                     variant="secondary"
+                    size="iconXs"
                     icon={paused ? PlayCircle : PauseCircle}
                     onDone={onChanged}
                   />
@@ -107,6 +108,7 @@ export function MonitorList({ items, emptyMessage, integrationId, onChanged }) {
                     resourceName={m.name}
                     variant="secondary"
                     icon={RotateCcw}
+                    size="iconXs"
                     onDone={onChanged}
                   />
                 )}
@@ -119,6 +121,7 @@ export function MonitorList({ items, emptyMessage, integrationId, onChanged }) {
                     resourceName={m.name}
                     variant="danger"
                     icon={Trash2}
+                    size="iconXs"
                     onDone={onChanged}
                   />
                 )}
@@ -126,10 +129,10 @@ export function MonitorList({ items, emptyMessage, integrationId, onChanged }) {
                   href="https://uptimerobot.com/dashboard"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-text-faint hover:text-accent transition-colors"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface text-text-faint hover:bg-surface-hover hover:text-accent transition-colors"
                   title="Open UptimeRobot"
                 >
-                  <ExternalLink size={15} />
+                  <ExternalLink className="size-4" />
                 </a>
               </div>
             </div>
@@ -153,13 +156,13 @@ export function IncidentList({ items, emptyMessage }) {
   if (!items?.length) return <EmptyState message={emptyMessage} />
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       {items.map((incident, i) => {
         const tone = incident.type === 'down' ? 'danger' : 'success'
         return (
           <Card key={`${incident.monitor_id}-${incident.datetime}-${i}`} className={tone === 'danger' ? 'border-danger/40 bg-danger-soft/20' : undefined}>
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
                   <Badge tone={tone}>
                     <Activity size={11} /> {incident.type}

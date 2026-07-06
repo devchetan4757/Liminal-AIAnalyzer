@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
@@ -7,7 +8,17 @@ const RISK_TONE = { low: 'success', medium: 'warning', high: 'danger' }
 // Every manual/Watchlist remote action goes through this - no exceptions.
 // Auto-triggered actions (not implemented yet - see REMOTE_ACTIONS_PLAN.md
 // section 3) would never pass through this component at all.
-export function ConfirmActionDialog({ label, consequence, riskTier, resourceName, busy, error, onConfirm, onCancel }) {
+//
+// `fields` is optional: [{ key, label, type: 'text'|'number', placeholder, min, max }].
+// Used for actions the registry marks as `requires` something the caller
+// can't compute on its own (e.g. render/scale needs num_instances,
+// render/run_job needs start_command). Actions like rollback resolve
+// their required deploy_id themselves and never pass fields here.
+export function ConfirmActionDialog({ label, consequence, riskTier, resourceName, fields, busy, error, onConfirm, onCancel }) {
+  const [values, setValues] = useState({})
+
+  const missingRequired = (fields || []).some((f) => !String(values[f.key] ?? '').trim())
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-sm rounded-lg border border-border bg-bg-raised p-5 shadow-xl">
@@ -30,6 +41,25 @@ export function ConfirmActionDialog({ label, consequence, riskTier, resourceName
           <p className="mb-4 text-xs text-text-dim">{consequence}</p>
         )}
 
+        {fields?.length > 0 && (
+          <div className="mb-4 flex flex-col gap-2">
+            {fields.map((f) => (
+              <label key={f.key} className="flex flex-col gap-1 text-xs text-text-dim">
+                {f.label}
+                <input
+                  type={f.type || 'text'}
+                  min={f.min}
+                  max={f.max}
+                  placeholder={f.placeholder}
+                  value={values[f.key] ?? ''}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  className="rounded border border-border bg-bg-inset px-2 py-1.5 text-sm text-text focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </label>
+            ))}
+          </div>
+        )}
+
         {error && <p className="mb-3 text-xs text-danger">{error}</p>}
 
         <div className="flex justify-end gap-2">
@@ -39,8 +69,8 @@ export function ConfirmActionDialog({ label, consequence, riskTier, resourceName
           <Button
             variant={riskTier === 'high' ? 'danger' : 'primary'}
             size="sm"
-            onClick={onConfirm}
-            disabled={busy}
+            onClick={() => onConfirm(values)}
+            disabled={busy || missingRequired}
           >
             {busy ? 'Working…' : 'Confirm'}
           </Button>

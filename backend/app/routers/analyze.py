@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 from app.core import llm, memory
 from app.core.aggregator import aggregate, quick_score
 from app.core.indicator import sha256_of_file
+from app.core.deps import get_current_user
 from app.db.session import get_db
+from app.db.models import User
 from app.db.crud import save_analysis
 from app.models.schemas import HashLookupRequest, IndicatorLookupRequest
 from app.services import virustotal
@@ -45,7 +47,11 @@ async def _build_analysis(indicator_type: str, indicator: str, session_id: str =
 
 
 @router.post("/indicator")
-async def analyze_indicator(req: IndicatorLookupRequest, db: Session = Depends(get_db)):
+async def analyze_indicator(
+    req: IndicatorLookupRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Manual analysis entry point -- type is explicit, not auto-detected.
     This is what the Manual Analysis page calls directly, independent of chat.
     """
@@ -71,12 +77,16 @@ async def analyze_indicator(req: IndicatorLookupRequest, db: Session = Depends(g
             "session_id": session_id,
         }
 
-    save_analysis(db, result)
+    save_analysis(db, result, user_id=current_user.id)
     return result
 
 
 @router.post("/hash")
-async def analyze_hash(req: HashLookupRequest, db: Session = Depends(get_db)):
+async def analyze_hash(
+    req: HashLookupRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Step 1: frontend computed the SHA256 client-side, no file left the browser yet."""
     session_id = req.session_id or str(uuid.uuid4())
     try:
@@ -92,7 +102,7 @@ async def analyze_hash(req: HashLookupRequest, db: Session = Depends(get_db)):
             "session_id": session_id,
         }
 
-    save_analysis(db, result)
+    save_analysis(db, result, user_id=current_user.id)
     return result
 
 
@@ -101,6 +111,7 @@ async def analyze_upload(
     file: UploadFile = File(...),
     session_id: str = Form(default=None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Step 2 (fallback): hash was unknown everywhere, user confirmed a real upload.
 
@@ -145,7 +156,7 @@ async def analyze_upload(
         )
 
     if result is not None:
-        save_analysis(db, result)
+        save_analysis(db, result, user_id=current_user.id)
         return result
 
     # Nothing in our threat-intel sources knows this hash. Submit the actual
@@ -194,7 +205,11 @@ async def analyze_upload(
 
 
 @router.get("/sandbox-status")
-async def sandbox_status(session_id: str, db: Session = Depends(get_db)):
+async def sandbox_status(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Poll this to check on a pending VT sandbox submission for this session."""
     job = memory.get_pending_sandbox_job(session_id)
     if not job:
@@ -247,5 +262,5 @@ async def sandbox_status(session_id: str, db: Session = Depends(get_db)):
             "session_id": session_id,
         }
 
-    save_analysis(db, result)
+    save_analysis(db, result, user_id=current_user.id)
     return result

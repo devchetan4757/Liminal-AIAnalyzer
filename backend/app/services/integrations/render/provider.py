@@ -35,8 +35,13 @@ class RenderProvider(IntegrationProvider):
     ACTIONS = {
         "redeploy": "trigger_deploy",
         "rollback": "rollback",
+        "cancel_deploy": "cancel_deploy",
+        "restart": "restart_service",
+        "scale": "scale_service",
         "suspend": "suspend_service",
         "resume": "resume_service",
+        "delete": "delete_service",
+        "run_job": "run_job",
     }
 
     async def execute_action(self, action: str, **kwargs):
