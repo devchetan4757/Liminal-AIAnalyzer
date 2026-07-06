@@ -4,6 +4,6 @@ __pycache__/
 *.pyc
 node_modules/
 chatbot.zip
-
+liminal.zip
 backend/sentrychat.db
 *.db
