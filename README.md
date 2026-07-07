@@ -1,98 +1,42 @@
-# Liminal
+<div align="center">
 
-**Threat Intel, Live Infra Watch**
+# 🛡️ Liminal
 
-Liminal is a blue-team security toolkit that ties together indicator-of-compromise
-analysis, an AI assistant that explains what it finds, live monitoring of your
-connected infrastructure, and the ability to actually act on threats — not just
-report them.
+**Threat intel, live infra watch.**
 
-Every account is fully isolated: your integrations, analyses, watchlist, and
-history are visible only to you, enforced at the database query level, not
-just the UI.
+An AI-assisted security console that triages indicators of compromise and keeps an eye on the cloud services your app actually runs on.
+
+![Liminal demo](./liminal_demo.gif)
+
+</div>
 
 ---
 
 ## What it does
 
-### 🔍 Manual Analysis
-Look up a file hash, IP, domain, or URL and get an aggregated verdict pulled
-from multiple threat-intel sources:
-- VirusTotal
-- AbuseIPDB
-- AlienVault OTX
-- abuse.ch (URLhaus, MalwareBazaar, ThreatFox)
+Liminal is a full-stack app with two halves that share one login:
 
-### 🤖 Liminal (AI)
-A chat assistant that reasons over analysis results, answers follow-up
-questions, and gives plain-English recommendations instead of leaving you to
-interpret raw scores.
+**Security / Threat Intel**
+- **Manual Analysis** — drop in a file hash, URL, IP, or domain and get a verdict, backed by VirusTotal, AbuseIPDB, OTX, and the abuse.ch feeds (URLhaus, MalwareBazaar, ThreatFox).
+- **Liminal (AI)** — a chat interface that detects indicators in plain-English messages, aggregates results across those sources, and summarizes them (via Groq) into a headline, findings, and a recommendation.
+- **History** — every past analysis, saved per account.
 
-### 🔌 Connected Apps
-Connect your real infrastructure and get security-relevant signal pulled
-automatically:
+**Infrastructure Watch**
+- **Connected Apps** — link your Render, Netlify, Vercel, Supabase, Neon, MongoDB, UptimeRobot, and GitHub accounts (credentials encrypted at rest with Fernet).
+- **Watchlist** — incidents raised against those connected resources, with AI-generated summaries and remediation playbooks.
+- **Remote Actions** — a provider-agnostic way to act on an incident directly (e.g. restart a Render service, redeploy a Netlify site), fully scoped and audited per account.
 
-| Provider | What it watches |
+Every route is account-scoped: one user can never see another's integrations, history, or incidents.
+
+## Stack
+
+| | |
 |---|---|
-| GitHub | Secret leaks, `.env` pushes, vulnerable dependencies, security events |
-| Render | Failed/suspended deploys, service health |
-| Neon | Project & branch operations |
-| MongoDB Atlas | Project activity/events (read-only, never cluster data) |
-| UptimeRobot | Monitor status, outages |
-
-All credentials are encrypted at rest (Fernet/AES) and every provider
-integration is strictly read-only unless you explicitly trigger a remote
-action.
-
-### 📋 Watchlist & Incidents
-Flag resources from any connected app and track them as incidents over time —
-status, severity, root cause, recommendations.
-
-### ⚡ Remote Actions
-Redeploy, roll back, suspend, or resume — with every action logged to an
-audit trail (who, what, when, result) whether it was triggered manually or
-from the watchlist.
-
-### 🎛️ Adaptive layout
-The nav sidebar and the Connected Apps panel both collapse to an icon rail,
-resize by dragging their edge, or respond to a left/right swipe on touch —
-so you can reclaim horizontal space for dashboards when you need it.
-
----
-
-## Tech stack
-
-**Backend:** FastAPI, SQLAlchemy, SQLite (swap-in ready for Postgres via
-`psycopg2`), JWT auth (`python-jose`), PBKDF2-HMAC-SHA256 password hashing,
-Fernet-encrypted credential storage, Groq for LLM inference.
-
-**Frontend:** React 18, Vite, Tailwind CSS, `lucide-react` icons,
-`react-markdown` for rendering AI responses.
-
----
-
-## Project structure
-
-```
-liminal/
-├── backend/
-│   ├── app/
-│   │   ├── core/          # auth, security, encryption, rate limiting, ownership
-│   │   ├── db/            # models, session, crud
-│   │   ├── routers/        # auth, analyze, chat, history, integrations, ...
-│   │   └── services/       # per-provider API clients (github, render, neon, ...)
-│   ├── requirements.txt
-│   └── run.sh
-└── frontend/
-    ├── src/
-    │   ├── components/     # ui primitives + feature components
-    │   ├── hooks/          # useResizablePanel, useSidebarWidth
-    │   ├── pages/           # ConnectedApps, HistoryPage, Watchlist, Login, ...
-    │   └── api/             # axios client
-    └── package.json
-```
-
----
+| **Frontend** | React 18 + Vite, Tailwind CSS, react-markdown |
+| **Backend** | FastAPI, SQLAlchemy, JWT auth (`python-jose`), Fernet encryption |
+| **AI** | Groq (chat summaries, incident recommendations) |
+| **Threat intel** | VirusTotal, AbuseIPDB, OTX, abuse.ch (URLhaus / MalwareBazaar / ThreatFox) |
+| **Infra integrations** | Render, Netlify, Vercel, Supabase, Neon, MongoDB, UptimeRobot, GitHub |
 
 ## Getting started
 
@@ -102,63 +46,58 @@ liminal/
 cd backend
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
+cp .env.example .env   # then fill in the keys below
+./run.sh                # uvicorn app.main:app --reload --port 8000
 ```
 
-Fill in `.env`. Two values are **required** and must be generated yourself
-(they're not in `.env.example` as placeholders on purpose — never commit real
-secrets):
+`.env` values:
 
-```bash
-# JWT_SECRET — signs auth tokens
-python -c "import secrets; print(secrets.token_hex(32))"
-
-# FERNET_KEY — encrypts stored integration credentials
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
-
-Then:
-
-```bash
-./run.sh   # starts uvicorn on :8000
-```
+| Variable | Required | Notes |
+|---|---|---|
+| `JWT_SECRET` | ✅ | `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `FERNET_KEY` | ✅ | `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `GROQ_API_KEY` | ✅ | Free at [console.groq.com](https://console.groq.com) — powers summaries & chat |
+| `ABUSECH_API_KEY` | ✅ | Free at [auth.abuse.ch](https://auth.abuse.ch) — needed for URLhaus/MalwareBazaar/ThreatFox |
+| `VT_API_KEY`, `ABUSEIPDB_API_KEY`, `OTX_API_KEY` | optional | App works without them; just skips that source |
+| `CORS_ORIGINS` | ✅ | Comma-separated frontend origin(s) |
 
 ### 2. Frontend
 
 ```bash
 cd frontend
-cp .env.example .env   # points at http://localhost:8000/api by default
+cp .env.example .env   # VITE_API_URL=http://localhost:8000/api
 npm install
-npm run dev            # starts Vite on :5173
+npm run dev             # http://localhost:5173
 ```
 
-Open `http://localhost:5173`, create an account, and you're in.
+### 3. Production build
 
----
+```bash
+cd frontend && npm run build
+```
+
+The backend serves the built `frontend/dist` directly, so in production you only need to run the FastAPI app (`./backend/run.sh` or your ASGI server of choice) pointed at the same directory.
+
+## Project layout
+
+```
+backend/
+  app/
+    routers/        # auth, chat, analyze, history, integrations, watchlist, remote_actions, + one per provider
+    core/            # auth, encryption, rate limiting, ownership checks, LLM + aggregation logic
+    services/        # threat-intel clients + per-provider integration/remote-action implementations
+    db/               # SQLAlchemy models & CRUD
+frontend/
+  src/
+    pages/           # one screen per sidebar section
+    components/      # chat window, analysis cards, per-provider dashboards, etc.
+```
 
 ## Security notes
 
-- Passwords: PBKDF2-HMAC-SHA256, 260k iterations, unique salt per user,
-  constant-time verification.
-- Every account-owned row (integrations, analyses, incidents) is scoped by
-  `user_id` and filtered at the query level — a request for someone else's
-  resource 404s, it never leaks a 403 that would confirm the resource exists.
-- Login and registration are rate-limited (per-IP and per-account) to blunt
-  brute-force and mass-registration attempts.
-- Integration credentials are encrypted at rest and never returned to the
-  client after creation.
+- Passwords are hashed; JWTs sign sessions; integration credentials are encrypted at rest (Fernet) and only decrypted server-side when an action actually runs.
+- All history/integration/incident/remote-action queries are scoped to `get_current_user`, not to a client-supplied ID.
+- Login and registration are rate-limited per IP.
 
 ---
 
-## Roadmap
-
-- [ ] Timeline view (cross-integration event feed)
-- [ ] Additional providers
-- [ ] Webhook-based real-time sync (currently poll/manual sync)
-
----
-
-## License
-
-Add a license before making this repo public — MIT is a reasonable default
-if you want others to freely use/fork it.
