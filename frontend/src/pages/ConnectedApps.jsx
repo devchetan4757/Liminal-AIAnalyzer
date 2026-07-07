@@ -553,15 +553,17 @@ export default function ConnectedApps() {
             </div>
           )}
           {!panelCollapsed && (
-            <Button size="sm" onClick={() => setShowModal(true)}>
-              <Plus size={14} />
-              Connect
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={() => setShowModal(true)}>
+                <Plus size={14} />
+                Connect
+              </Button>
+            </div>
           )}
         </div>
 
         {panelCollapsed && (
-          <div className="flex justify-center border-b border-border py-2">
+          <div className="flex flex-col items-center gap-1 border-b border-border py-2">
             <button
               onClick={() => setShowModal(true)}
               title="Connect an app"

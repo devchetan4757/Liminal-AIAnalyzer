@@ -9,8 +9,9 @@ import ManualAnalysisPage from "./pages/ManualAnalysisPage";
 import HistoryPage from "./pages/HistoryPage";
 import ConnectedApps from "./pages/ConnectedApps";
 import Watchlist from "./pages/Watchlist";
+import { ThemeProvider } from "./context/ThemeContext";
 
-export default function App() {
+function AppShell() {
   const [section, setSection] = useState("manual");
 
   const handleLogout = () => {
@@ -72,5 +73,13 @@ export default function App() {
         </div>
       </div>
     </ProtectedRoute>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppShell />
+    </ThemeProvider>
   );
 }

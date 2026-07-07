@@ -12,9 +12,12 @@ import {
   UserCircle2,
   ChevronLeft,
   ChevronRight,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { getCurrentUser } from "../api/client";
 import { useSidebarWidth } from "../hooks/useSidebarWidth";
+import { useTheme } from "../context/ThemeContext";
 
 const NAV = [
   {
@@ -68,6 +71,7 @@ const NAV = [
 
 export default function Sidebar({ active, onSelect, onLogout }) {
   const [username, setUsername] = useState(localStorage.getItem("username") || "")
+  const { theme, toggleTheme } = useTheme()
 
   const {
     collapsed,
@@ -160,6 +164,16 @@ export default function Sidebar({ active, onSelect, onLogout }) {
           <UserCircle2 size={16} className="shrink-0 text-text-faint" />
           {!collapsed && <span className="truncate">{username || "…"}</span>}
         </div>
+        <button
+          onClick={toggleTheme}
+          title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          className={`mb-1 flex w-full items-center gap-2 rounded-md py-1.5 text-xs font-medium text-text-faint transition-colors hover:bg-bg-inset hover:text-accent ${
+            collapsed ? "justify-center px-0" : "px-2"
+          }`}
+        >
+          {theme === "dark" ? <Sun size={14} className="shrink-0" /> : <Moon size={14} className="shrink-0" />}
+          {!collapsed && (theme === "dark" ? "Light mode" : "Dark mode")}
+        </button>
         <button
           onClick={onLogout}
           title={collapsed ? "Log out" : undefined}

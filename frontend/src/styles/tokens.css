@@ -10,11 +10,61 @@
 */
 
 @layer base {
+  :root {
+    /* light theme (current default app-wide palette) */
+    --color-bg: #F4FBF6;
+    --color-bg-raised: #FFFFFF;
+    --color-bg-inset: #F0F7F2;
+
+    --color-border: rgba(15,23,16,0.10);
+    --color-border-soft: rgba(15,23,16,0.06);
+
+    --color-text: #14241A;
+    --color-text-dim: #44574A;
+    --color-text-faint: #6E8276;
+
+    --color-accent: #16A34A;
+    --color-accent-soft: rgba(22,163,74,0.12);
+    --color-accent-strong: #22C55E;
+
+    --color-success: #16A34A;
+    --color-success-soft: rgba(22,163,74,0.12);
+    --color-warning: #D97706;
+    --color-warning-soft: rgba(217,119,6,0.12);
+    --color-danger: #DC2626;
+    --color-danger-soft: rgba(220,38,38,0.12);
+  }
+
+  .theme-dark {
+    --color-bg: #0a0f0c;
+    --color-bg-raised: #0f1512;
+    --color-bg-inset: #131b17;
+
+    --color-border: #212b25;
+    --color-border-soft: #1a231e;
+
+    --color-text: #e8f0ea;
+    --color-text-dim: #8fa199;
+    --color-text-faint: #5c6a63;
+
+    --color-accent: #4ade80;
+    --color-accent-soft: rgba(74,222,128,0.14);
+    --color-accent-strong: #22c55e;
+
+    --color-success: #4ade80;
+    --color-success-soft: rgba(74,222,128,0.14);
+    --color-warning: #e0b04a;
+    --color-warning-soft: rgba(224,176,74,0.14);
+    --color-danger: #e2685f;
+    --color-danger-soft: rgba(226,104,95,0.14);
+  }
+
   body {
     @apply bg-bg text-text font-sans antialiased;
   }
 
   ::selection {
-    @apply bg-accent/30;
+    background-color: var(--color-accent-soft);
+    color: var(--color-text);
   }
 }

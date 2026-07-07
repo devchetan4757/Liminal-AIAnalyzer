@@ -51,11 +51,7 @@ body {
       rgba(134, 239, 172, 0.10),
       transparent 60%
     ),
-    linear-gradient(
-      180deg,
-      #F4FBF6 0%,
-      #ECF7EF 100%
-    );
+    var(--color-bg, #F4FBF6);
 
   line-height: 1.65;
   letter-spacing: -0.015em;
@@ -65,6 +61,21 @@ body {
   text-rendering: optimizeLegibility;
 
   overflow-x: hidden;
+}
+
+html.theme-dark body {
+  background:
+    radial-gradient(
+      900px 500px at 50% -10%,
+      rgba(74, 222, 128, 0.05),
+      transparent 60%
+    ),
+    radial-gradient(
+      700px 350px at 100% 0%,
+      rgba(74, 222, 128, 0.06),
+      transparent 60%
+    ),
+    var(--color-bg);
 }
 
 /* ==========================================================================

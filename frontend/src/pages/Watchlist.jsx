@@ -16,6 +16,8 @@ import {
   Github,
   History,
   RotateCw,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import { getWatchlist, resolveWatchlistItem, deleteWatchlistItem, getRemoteActions } from '../api/client'
 import { Card } from '../components/ui/Card'
@@ -238,6 +240,24 @@ export default function Watchlist() {
   const [tab, setTab] = useState('watchlist') // watchlist | actions
   const [actionsReloadKey, setActionsReloadKey] = useState(0)
 
+  // Theme toggle - scoped to this page only, persisted independently of
+  // the Connected Apps toggle.
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('liminal-watchlist-theme') || 'light'
+    } catch {
+      return 'light'
+    }
+  })
+
+  const toggleTheme = () => {
+    setTheme(prev => {
+      const next = prev === 'dark' ? 'light' : 'dark'
+      try { localStorage.setItem('liminal-watchlist-theme', next) } catch {}
+      return next
+    })
+  }
+
   const load = async () => {
     setLoading(true)
     setError('')
@@ -285,16 +305,25 @@ export default function Watchlist() {
   const resolved = items.filter((i) => i.status === 'resolved')
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto px-6 py-6">
+    <div className={`flex h-full flex-col overflow-y-auto px-6 py-6 ${theme === 'dark' ? 'theme-dark' : ''}`}>
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Eye size={18} className="text-accent" />
           <h1 className="text-xl font-semibold text-text">Watchlist</h1>
         </div>
-        <Button variant="ghost" size="sm" onClick={tab === 'watchlist' ? load : () => setActionsReloadKey((k) => k + 1)}>
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-text-dim hover:bg-bg-inset hover:text-accent transition-colors"
+          >
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+          <Button variant="ghost" size="sm" onClick={tab === 'watchlist' ? load : () => setActionsReloadKey((k) => k + 1)}>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="mb-6 flex border-b border-border">
