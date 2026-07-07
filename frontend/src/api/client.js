@@ -286,9 +286,15 @@ export async function getRenderStatus(integrationId, { refresh = false } = {}) {
   }
 }
 
+// Settings-form operations (create) - separate from the one-click
+// redeploy/rollback/cancel/suspend/resume/restart/scale actions, which
+// go through triggerRemoteAction below.
+
 export async function getRenderOwners(integrationId) {
   try {
-    const { data } = await api.get(`/integrations/${integrationId}/render/owners`, { timeout: 15000 })
+    const { data } = await api.get(`/integrations/${integrationId}/render/owners`, {
+      timeout: 20000,
+    })
     return data
   } catch (err) {
     throw new Error(extractErrorMessage(err))
@@ -300,8 +306,50 @@ export async function createRenderService(integrationId, payload) {
     const { data } = await api.post(
       `/integrations/${integrationId}/render/services`,
       payload,
-      { timeout: 35000 },
+      { timeout: 45000 },
     )
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// --- Netlify ------------------------------------------------------------
+
+export async function getNetlifyStatus(integrationId, { refresh = false } = {}) {
+  try {
+    const { data } = await api.get(`/integrations/${integrationId}/netlify/status`, {
+      params: { refresh },
+      timeout: 50000,
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// --- Vercel ---------------------------------------------------------------
+
+export async function getVercelStatus(integrationId, { refresh = false } = {}) {
+  try {
+    const { data } = await api.get(`/integrations/${integrationId}/vercel/status`, {
+      params: { refresh },
+      timeout: 50000,
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// --- Supabase ---------------------------------------------------------------
+
+export async function getSupabaseStatus(integrationId, { refresh = false } = {}) {
+  try {
+    const { data } = await api.get(`/integrations/${integrationId}/supabase/status`, {
+      params: { refresh },
+      timeout: 50000,
+    })
     return data
   } catch (err) {
     throw new Error(extractErrorMessage(err))

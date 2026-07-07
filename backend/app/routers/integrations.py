@@ -93,6 +93,40 @@ async def create_integration(
         neon = manager.build("neon", api_key=api_key)
         await neon.validate()
 
+    if provider == "netlify":
+        token = credentials.get("token")
+        if not token:
+            raise HTTPException(
+                status_code=400,
+                detail="Netlify access token is required.",
+            )
+
+        netlify = manager.build("netlify", token=token)
+        await netlify.validate()
+
+    if provider == "vercel":
+        api_key = credentials.get("api_key")
+        team_id = credentials.get("team_id") or None
+        if not api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="Vercel access token is required.",
+            )
+
+        vercel = manager.build("vercel", api_key=api_key, team_id=team_id)
+        await vercel.validate()
+
+    if provider == "supabase":
+        api_key = credentials.get("api_key")
+        if not api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="Supabase access token is required.",
+            )
+
+        supabase = manager.build("supabase", api_key=api_key)
+        await supabase.validate()
+
     encrypted = {
         k: encrypt(v)
         for k, v in credentials.items()
@@ -188,6 +222,44 @@ async def validate_integration(
 
         try:
             return await neon.validate()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    # -------------------------
+    # Netlify validation
+    # -------------------------
+    if integration.provider == "netlify":
+        token = decrypt(integration.encrypted_credentials["token"])
+        netlify = manager.build("netlify", token=token)
+
+        try:
+            return await netlify.validate()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    # -------------------------
+    # Vercel validation
+    # -------------------------
+    if integration.provider == "vercel":
+        api_key = decrypt(integration.encrypted_credentials["api_key"])
+        team_id_enc = integration.encrypted_credentials.get("team_id")
+        team_id = decrypt(team_id_enc) if team_id_enc else None
+        vercel = manager.build("vercel", api_key=api_key, team_id=team_id)
+
+        try:
+            return await vercel.validate()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    # -------------------------
+    # Supabase validation
+    # -------------------------
+    if integration.provider == "supabase":
+        api_key = decrypt(integration.encrypted_credentials["api_key"])
+        supabase = manager.build("supabase", api_key=api_key)
+
+        try:
+            return await supabase.validate()
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
@@ -366,6 +438,110 @@ async def sync_integration(
                 db=db,
                 integration_id=integration.id,
                 provider="neon",
+                resource_type="project",
+                external_id=project["id"],
+                name=project["name"],
+                metadata_json=project,
+            )
+
+        return data
+
+    # -------------------------
+    # Netlify Sync
+    # -------------------------
+    if integration.provider == "netlify":
+        token = decrypt(integration.encrypted_credentials["token"])
+
+        provider = manager.build("netlify", token=token)
+
+        try:
+            data = await provider.sync()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Netlify sync failed: {exc}",
+            )
+
+        first_site = data["sites"][0] if data["sites"] else None
+        integration.account_identifier = first_site["id"] if first_site else None
+        integration.last_sync = datetime.now(timezone.utc)
+        db.commit()
+
+        for site in data["sites"]:
+            upsert_resource(
+                db=db,
+                integration_id=integration.id,
+                provider="netlify",
+                resource_type="site",
+                external_id=site["id"],
+                name=site["name"],
+                metadata_json=site,
+            )
+
+        return data
+
+    # -------------------------
+    # Vercel Sync
+    # -------------------------
+    if integration.provider == "vercel":
+        api_key = decrypt(integration.encrypted_credentials["api_key"])
+        team_id_enc = integration.encrypted_credentials.get("team_id")
+        team_id = decrypt(team_id_enc) if team_id_enc else None
+
+        provider = manager.build("vercel", api_key=api_key, team_id=team_id)
+
+        try:
+            data = await provider.sync()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Vercel sync failed: {exc}",
+            )
+
+        first_project = data["projects"][0] if data["projects"] else None
+        integration.account_identifier = first_project["id"] if first_project else None
+        integration.last_sync = datetime.now(timezone.utc)
+        db.commit()
+
+        for project in data["projects"]:
+            upsert_resource(
+                db=db,
+                integration_id=integration.id,
+                provider="vercel",
+                resource_type="project",
+                external_id=project["id"],
+                name=project["name"],
+                metadata_json=project,
+            )
+
+        return data
+
+    # -------------------------
+    # Supabase Sync
+    # -------------------------
+    if integration.provider == "supabase":
+        api_key = decrypt(integration.encrypted_credentials["api_key"])
+
+        provider = manager.build("supabase", api_key=api_key)
+
+        try:
+            data = await provider.sync()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Supabase sync failed: {exc}",
+            )
+
+        first_project = data["projects"][0] if data["projects"] else None
+        integration.account_identifier = first_project["id"] if first_project else None
+        integration.last_sync = datetime.now(timezone.utc)
+        db.commit()
+
+        for project in data["projects"]:
+            upsert_resource(
+                db=db,
+                integration_id=integration.id,
+                provider="supabase",
                 resource_type="project",
                 external_id=project["id"],
                 name=project["name"],

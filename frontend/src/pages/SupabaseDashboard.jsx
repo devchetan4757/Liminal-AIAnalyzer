@@ -1,20 +1,20 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw, Triangle, XCircle, Layers } from 'lucide-react'
-import { getVercelStatus } from '../api/client'
+import { RefreshCw, Zap, XCircle, GitBranch, Database } from 'lucide-react'
+import { getSupabaseStatus } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { DeploymentList, ProjectList } from '../components/vercel/DeployTabs'
+import { ProjectList, BranchList, UnhealthyProjectList } from '../components/supabase/ProjectTabs'
 
 const TABS = [
-  { key: 'projects',           label: 'Projects',           statKey: 'total_projects' },
-  { key: 'recent_deployments', label: 'Recent Deployments', statKey: 'recent_deployment_count' },
-  { key: 'failed_deployments', label: 'Failed Deployments', statKey: 'failed_deployment_count' },
+  { key: 'projects',             label: 'Projects',           statKey: 'total_projects' },
+  { key: 'branches',             label: 'Branches',           statKey: 'total_branches' },
+  { key: 'unhealthy_projects',   label: 'Unhealthy',          statKey: 'unhealthy_project_count' },
 ]
 
 const EMPTY_MESSAGE = {
   projects:            'No projects found for this account.',
-  recent_deployments:  'No recent deployment activity.',
-  failed_deployments:  'No failed deployments — all green.',
+  branches:            'No branches found.',
+  unhealthy_projects:  'No unhealthy projects — all green.',
 }
 
 function StatCard({ label, value, tone = 'neutral', icon: Icon }) {
@@ -34,7 +34,7 @@ function StatCard({ label, value, tone = 'neutral', icon: Icon }) {
   )
 }
 
-export default function VercelDashboard({ integration }) {
+export default function SupabaseDashboard({ integration }) {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
@@ -44,7 +44,7 @@ export default function VercelDashboard({ integration }) {
     setLoading(true)
     setError('')
     try {
-      const result = await getVercelStatus(integration.id, opts)
+      const result = await getSupabaseStatus(integration.id, opts)
       setData(result)
     } catch (err) {
       setError(err.message)
@@ -75,7 +75,7 @@ export default function VercelDashboard({ integration }) {
       <Card className="border-danger/40 bg-danger-soft/20">
         <p className="text-sm text-danger font-medium mb-1">Status fetch failed</p>
         <p className="text-sm text-text-dim">{error}</p>
-        <Button variant="secondary" size="sm" className="mt-3" onClick={load}>
+        <Button variant="secondary" size="sm" className="mt-3" onClick={() => load()}>
           Retry
         </Button>
       </Card>
@@ -91,12 +91,12 @@ export default function VercelDashboard({ integration }) {
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-bg-inset">
-            <Triangle size={16} className="text-accent" />
+            <Zap size={18} className="text-accent" />
           </div>
           <div>
             <div className="text-sm font-semibold text-text">{integration.display_name}</div>
             <div className="text-[11px] text-text-faint">
-              Vercel · Projects & Deployments
+              Supabase · Projects & Branches
               {data._cache && (
                 <span>
                   {' '}· {data._cache.hit
@@ -107,19 +107,17 @@ export default function VercelDashboard({ integration }) {
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={() => load({ refresh: true })} disabled={loading}>
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </Button>
-        </div>
+        <Button variant="secondary" size="sm" onClick={() => load({ refresh: true })} disabled={loading}>
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </Button>
       </div>
 
       {/* stats row */}
       <div className="flex flex-wrap gap-3 border-b border-border px-6 py-4">
-        <StatCard label="Total Projects"    value={s.total_projects}           tone="neutral" icon={Layers} />
-        <StatCard label="Failed Deploys"    value={s.failed_deployment_count}  tone={s.failed_deployment_count ? 'danger' : 'success'} icon={XCircle} />
-        <StatCard label="Recent Deploys"    value={s.recent_deployment_count}  tone="neutral" icon={Triangle} />
+        <StatCard label="Total Projects"     value={s.total_projects}           tone="neutral" icon={Database} />
+        <StatCard label="Total Branches"     value={s.total_branches}           tone="neutral" icon={GitBranch} />
+        <StatCard label="Unhealthy Projects" value={s.unhealthy_project_count}  tone={s.unhealthy_project_count ? 'danger' : 'success'} icon={XCircle} />
       </div>
 
       {/* tabs */}
@@ -151,18 +149,11 @@ export default function VercelDashboard({ integration }) {
 
       {/* tab content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {tab === 'projects'
-          ? <ProjectList
-              items={data.projects}
-              emptyMessage={EMPTY_MESSAGE.projects}
-            />
-          : <DeploymentList
-              items={data[tab]}
-              emptyMessage={EMPTY_MESSAGE[tab]}
-              integrationId={integration.id}
-              onChanged={() => load({ refresh: true })}
-            />
-        }
+        {tab === 'projects' && <ProjectList items={data.projects} emptyMessage={EMPTY_MESSAGE.projects} />}
+        {tab === 'branches' && <BranchList items={data.branches} emptyMessage={EMPTY_MESSAGE.branches} />}
+        {tab === 'unhealthy_projects' && (
+          <UnhealthyProjectList items={data.unhealthy_projects} emptyMessage={EMPTY_MESSAGE.unhealthy_projects} integrationId={integration.id} />
+        )}
       </div>
 
     </div>

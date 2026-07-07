@@ -6,7 +6,7 @@ import os
 
 from app.config import settings
 from app.db.session import init_db
-from app.routers import analyze, chat, auth, history, integrations, mongodb, render, uptimerobot, neon, watchlist, remote_actions
+from app.routers import analyze, chat, auth, history, integrations, mongodb, render, uptimerobot, neon, watchlist, remote_actions, netlify, vercel, supabase
 
 app = FastAPI(title="Malware Analysis Chatbot API")
 init_db()
@@ -25,6 +25,9 @@ app.include_router(mongodb.router)
 app.include_router(render.router)
 app.include_router(uptimerobot.router)
 app.include_router(neon.router)
+app.include_router(netlify.router)
+app.include_router(vercel.router)
+app.include_router(supabase.router)
 app.include_router(watchlist.router)
 app.include_router(remote_actions.router)
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])

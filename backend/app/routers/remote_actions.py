@@ -24,12 +24,29 @@ router = APIRouter(
 # connected app. See REMOTE_ACTIONS_PLAN.md. This intentionally does
 # NOT special-case "render" anywhere below - the registry + each
 # provider's own ACTIONS map (see e.g. RenderProvider.ACTIONS) are what
-# make an action available at all. Only Render has entries today.
+# make an action available at all. Render and Netlify have entries
+# today.
 #
 # Every route here requires get_current_user and scopes both the
 # integration lookup and the remote_actions history query to that
 # account - one account can never see or trigger actions against
 # another account's connected apps.
+
+# Per-provider kwarg names for building the provider client
+# (manager.build(provider, **{kwarg: credential})) and for the
+# resource-id argument passed into execute_action(). Providers differ
+# here - Render takes api_key/service_id, Netlify takes token/site_id -
+# so this can't be hardcoded to one shape. Anything not listed falls
+# back to Render's original ("api_key" / "service_id") so behavior for
+# providers already wired up before this dict existed doesn't change.
+PROVIDER_CREDENTIAL_KWARG = {
+    "render": "api_key",
+    "netlify": "token",
+}
+PROVIDER_RESOURCE_KWARG = {
+    "render": "service_id",
+    "netlify": "site_id",
+}
 
 
 class RemoteActionRequest(BaseModel):
@@ -144,11 +161,14 @@ async def trigger_remote_action(
     # problems (e.g. a read-only key) surface here as a normal provider
     # error - caught below and recorded, not passed through raw.
     try:
-        api_key = decrypt(integration.encrypted_credentials["api_key"])
-        provider = manager.build(req.provider, api_key=api_key)
+        cred_kwarg = PROVIDER_CREDENTIAL_KWARG.get(req.provider, "api_key")
+        resource_kwarg = PROVIDER_RESOURCE_KWARG.get(req.provider, "service_id")
+
+        credential = decrypt(integration.encrypted_credentials[cred_kwarg])
+        provider = manager.build(req.provider, **{cred_kwarg: credential})
 
         result = await asyncio.wait_for(
-            provider.execute_action(req.action, service_id=req.resource_id, **req.extra),
+            provider.execute_action(req.action, **{resource_kwarg: req.resource_id}, **req.extra),
             timeout=30.0,
         )
 

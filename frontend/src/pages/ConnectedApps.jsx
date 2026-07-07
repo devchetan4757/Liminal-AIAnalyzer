@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, X, Github, Database, Cloud, Activity, Plug, Trash2, RefreshCw, CheckCircle2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, X, Github, Database, Cloud, Globe, Activity, Plug, Trash2, RefreshCw, CheckCircle2, AlertCircle, ChevronLeft, ChevronRight, Triangle, Zap } from 'lucide-react'
 import { getIntegrations, createIntegration, syncIntegration, deleteIntegration } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -9,8 +9,11 @@ import { useResizablePanel } from '../hooks/useResizablePanel'
 import GitHubDashboard from './GitHubDashboard'
 import MongoDBDashboard from './MongoDBDashboard'
 import RenderDashboard from './RenderDashboard'
+import NetlifyDashboard from './NetlifyDashboard'
 import UptimeRobotDashboard from './UptimeRobotDashboard'
 import NeonDashboard from './NeonDashboard'
+import VercelDashboard from './VercelDashboard'
+import SupabaseDashboard from './SupabaseDashboard'
 
 const PROVIDER_ICON = {
   github:  Github,
@@ -18,6 +21,8 @@ const PROVIDER_ICON = {
   render:  Cloud,
   uptimerobot: Activity,
   neon: Database,
+  vercel: Triangle,
+  supabase: Zap,
 }
 
 // Single source of truth for the connect modal: label, icon, auth type,
@@ -68,6 +73,50 @@ const PROVIDERS = [
     note: 'From Render Dashboard → Account Settings → API Keys. Read-only use here — service and deploy status only, never env var values.',
   },
   {
+    key: 'netlify',
+    label: 'Netlify',
+    icon: Globe,
+    category: 'Web Hosting',
+    authType: 'token',
+    namePlaceholder: 'e.g. Production Netlify',
+    fields: [
+      {
+        stateKey: 'netlifyToken',
+        credKey: 'token',
+        label: 'Personal Access Token',
+        placeholder: 'nfp_...',
+        type: 'password',
+      },
+    ],
+    note: 'From Netlify → User Settings → Applications → Personal access tokens. Read-only use here — site and deploy status only, never env var values.',
+  },
+  {
+    key: 'vercel',
+    label: 'Vercel',
+    icon: Triangle,
+    category: 'Web Hosting',
+    authType: 'api_key',
+    namePlaceholder: 'e.g. Production Vercel',
+    fields: [
+      {
+        stateKey: 'vercelToken',
+        credKey: 'api_key',
+        label: 'Access Token',
+        placeholder: 'Vercel access token',
+        type: 'password',
+      },
+      {
+        stateKey: 'vercelTeamId',
+        credKey: 'team_id',
+        label: 'Team ID (optional)',
+        placeholder: 'team_...',
+        type: 'text',
+        optional: true,
+      },
+    ],
+    note: 'From Vercel → Account Settings → Tokens. Read-only use here — project and deployment metadata only, never env var values. Leave Team ID blank to use your personal account.',
+  },
+  {
     key: 'uptimerobot',
     label: 'UptimeRobot',
     icon: Activity,
@@ -108,6 +157,24 @@ const PROVIDERS = [
       },
     ],
     note: 'From Neon Console → Account Settings → API Keys. Read-only use here — project, branch, and operation metadata only, never connection strings or role passwords.',
+  },
+  {
+    key: 'supabase',
+    label: 'Supabase',
+    icon: Zap,
+    category: 'Databases',
+    authType: 'api_key',
+    namePlaceholder: 'e.g. Production Supabase',
+    fields: [
+      {
+        stateKey: 'supabaseApiKey',
+        credKey: 'api_key',
+        label: 'Access Token',
+        placeholder: 'sbp_...',
+        type: 'password',
+      },
+    ],
+    note: 'From Supabase → Account → Access Tokens. Read-only use here — project and branch metadata only, never connection strings or service-role keys.',
   },
   {
     key: 'mongodb',
@@ -203,7 +270,7 @@ function ConnectModal({ onClose, onConnected }) {
 
   const isValid =
     displayName.trim() &&
-    provider.fields.every(f => (values[f.stateKey] || '').trim())
+    provider.fields.every(f => f.optional || (values[f.stateKey] || '').trim())
 
   const submit = async () => {
     if (!isValid) return
@@ -519,7 +586,7 @@ export default function ConnectedApps() {
               <Github size={28} className="mx-auto mb-3 text-text-faint" />
               <p className="text-sm font-medium text-text">No apps connected</p>
               <p className="mt-1 text-xs text-text-faint">
-                Connect GitHub, MongoDB Atlas, Render, UptimeRobot, or Neon to start monitoring for security issues.
+                Connect GitHub, MongoDB Atlas, Render, Netlify, Vercel, Supabase, UptimeRobot, or Neon to start monitoring for security issues.
               </p>
             </div>
           )}
@@ -587,10 +654,16 @@ export default function ConnectedApps() {
           <MongoDBDashboard integration={selected} />
         ) : selected.provider === 'render' ? (
           <RenderDashboard integration={selected} />
+        ) : selected.provider === 'netlify' ? (
+          <NetlifyDashboard integration={selected} />
         ) : selected.provider === 'uptimerobot' ? (
           <UptimeRobotDashboard integration={selected} />
         ) : selected.provider === 'neon' ? (
           <NeonDashboard integration={selected} />
+        ) : selected.provider === 'vercel' ? (
+          <VercelDashboard integration={selected} />
+        ) : selected.provider === 'supabase' ? (
+          <SupabaseDashboard integration={selected} />
         ) : (
           <GitHubDashboard integration={selected} />
         )}

@@ -1,20 +1,22 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw, Triangle, XCircle, Layers } from 'lucide-react'
-import { getVercelStatus } from '../api/client'
+import { RefreshCw, Globe, XCircle, Lock, Rocket } from 'lucide-react'
+import { getNetlifyStatus } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { DeploymentList, ProjectList } from '../components/vercel/DeployTabs'
+import { DeployList, SiteList } from '../components/netlify/DeployTabs'
 
 const TABS = [
-  { key: 'projects',           label: 'Projects',           statKey: 'total_projects' },
-  { key: 'recent_deployments', label: 'Recent Deployments', statKey: 'recent_deployment_count' },
-  { key: 'failed_deployments', label: 'Failed Deployments', statKey: 'failed_deployment_count' },
+  { key: 'sites',           label: 'Sites',           statKey: 'total_sites' },
+  { key: 'recent_deploys',  label: 'Recent Deploys',  statKey: 'recent_deploy_count' },
+  { key: 'failed_deploys',  label: 'Failed Deploys',  statKey: 'failed_deploy_count' },
+  { key: 'locked_sites',    label: 'Locked',          statKey: 'locked_count' },
 ]
 
 const EMPTY_MESSAGE = {
-  projects:            'No projects found for this account.',
-  recent_deployments:  'No recent deployment activity.',
-  failed_deployments:  'No failed deployments — all green.',
+  sites:          'No sites found for this account.',
+  recent_deploys: 'No recent deploy activity.',
+  failed_deploys: 'No failed deploys — all green.',
+  locked_sites:   'No locked sites.',
 }
 
 function StatCard({ label, value, tone = 'neutral', icon: Icon }) {
@@ -34,17 +36,17 @@ function StatCard({ label, value, tone = 'neutral', icon: Icon }) {
   )
 }
 
-export default function VercelDashboard({ integration }) {
+export default function NetlifyDashboard({ integration }) {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
-  const [tab, setTab]         = useState('projects')
+  const [tab, setTab]         = useState('sites')
 
   const load = async (opts) => {
     setLoading(true)
     setError('')
     try {
-      const result = await getVercelStatus(integration.id, opts)
+      const result = await getNetlifyStatus(integration.id, opts)
       setData(result)
     } catch (err) {
       setError(err.message)
@@ -58,7 +60,7 @@ export default function VercelDashboard({ integration }) {
   if (loading) return (
     <div className="flex h-full flex-col gap-4 p-6">
       <div className="flex gap-3">
-        {[1,2,3].map(i => (
+        {[1,2,3,4].map(i => (
           <div key={i} className="h-20 w-32 animate-pulse rounded-lg bg-bg-inset" />
         ))}
       </div>
@@ -91,12 +93,12 @@ export default function VercelDashboard({ integration }) {
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-bg-inset">
-            <Triangle size={16} className="text-accent" />
+            <Globe size={18} className="text-accent" />
           </div>
           <div>
             <div className="text-sm font-semibold text-text">{integration.display_name}</div>
             <div className="text-[11px] text-text-faint">
-              Vercel · Projects & Deployments
+              Netlify · Sites & Deploys
               {data._cache && (
                 <span>
                   {' '}· {data._cache.hit
@@ -107,19 +109,18 @@ export default function VercelDashboard({ integration }) {
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={() => load({ refresh: true })} disabled={loading}>
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </Button>
-        </div>
+        <Button variant="secondary" size="sm" onClick={() => load({ refresh: true })} disabled={loading}>
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </Button>
       </div>
 
       {/* stats row */}
       <div className="flex flex-wrap gap-3 border-b border-border px-6 py-4">
-        <StatCard label="Total Projects"    value={s.total_projects}           tone="neutral" icon={Layers} />
-        <StatCard label="Failed Deploys"    value={s.failed_deployment_count}  tone={s.failed_deployment_count ? 'danger' : 'success'} icon={XCircle} />
-        <StatCard label="Recent Deploys"    value={s.recent_deployment_count}  tone="neutral" icon={Triangle} />
+        <StatCard label="Total Sites"     value={s.total_sites}          tone="neutral" icon={Globe} />
+        <StatCard label="Failed Deploys"  value={s.failed_deploy_count}  tone={s.failed_deploy_count ? 'danger'  : 'success'} icon={XCircle} />
+        <StatCard label="Locked"          value={s.locked_count}         tone={s.locked_count        ? 'warning' : 'success'} icon={Lock} />
+        <StatCard label="Recent Deploys"  value={s.recent_deploy_count}  tone="neutral" icon={Rocket} />
       </div>
 
       {/* tabs */}
@@ -151,15 +152,19 @@ export default function VercelDashboard({ integration }) {
 
       {/* tab content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {tab === 'projects'
-          ? <ProjectList
-              items={data.projects}
-              emptyMessage={EMPTY_MESSAGE.projects}
+        {tab === 'sites'
+          ? <SiteList
+              items={data.sites}
+              emptyMessage={EMPTY_MESSAGE.sites}
+              integrationId={integration.id}
+              onChanged={() => load({ refresh: true })}
             />
-          : <DeploymentList
+          : <DeployList
               items={data[tab]}
               emptyMessage={EMPTY_MESSAGE[tab]}
               integrationId={integration.id}
+              allowRollback={tab === 'failed_deploys' || tab === 'recent_deploys'}
+              allDeploys={data.recent_deploys}
               onChanged={() => load({ refresh: true })}
             />
         }
