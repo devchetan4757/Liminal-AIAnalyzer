@@ -286,6 +286,21 @@ export async function getRenderStatus(integrationId, { refresh = false } = {}) {
   }
 }
 
+// On-demand raw log lines for a single service - fetched only when
+// the user opens that service's log panel, separate from the cached
+// status/summary poll above.
+export async function getRenderServiceLogs(integrationId, serviceId, { limit = 100, type } = {}) {
+  try {
+    const { data } = await api.get(
+      `/integrations/${integrationId}/render/services/${serviceId}/logs`,
+      { params: { limit, type }, timeout: 35000 },
+    )
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
 // Settings-form operations (create) - separate from the one-click
 // redeploy/rollback/cancel/suspend/resume/restart/scale actions, which
 // go through triggerRemoteAction below.

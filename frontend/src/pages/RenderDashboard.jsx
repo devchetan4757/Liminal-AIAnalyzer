@@ -5,6 +5,7 @@ import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { DeployList, ServiceList } from '../components/render/DeployTabs'
 import { ServiceFormDialog } from '../components/render/ServiceFormDialog'
+import { ServiceLogsPanel } from '../components/render/ServiceLogsPanel'
 
 const TABS = [
   { key: 'services',           label: 'Services',           statKey: 'total_services' },
@@ -43,6 +44,7 @@ export default function RenderDashboard({ integration }) {
   const [error, setError]     = useState('')
   const [tab, setTab]         = useState('services')
   const [showNewService, setShowNewService] = useState(false)
+  const [logsService, setLogsService] = useState(null)
 
   const load = async (opts) => {
     setLoading(true)
@@ -166,6 +168,7 @@ export default function RenderDashboard({ integration }) {
               emptyMessage={EMPTY_MESSAGE.services}
               integrationId={integration.id}
               onChanged={() => load({ refresh: true })}
+              onViewLogs={(svc) => setLogsService(svc)}
             />
           : <DeployList
               items={data[tab]}
@@ -186,6 +189,15 @@ export default function RenderDashboard({ integration }) {
             setShowNewService(false)
             load({ refresh: true })
           }}
+        />
+      )}
+
+      {logsService && (
+        <ServiceLogsPanel
+          integrationId={integration.id}
+          serviceId={logsService.id}
+          serviceName={logsService.name}
+          onClose={() => setLogsService(null)}
         />
       )}
 

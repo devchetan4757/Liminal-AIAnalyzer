@@ -118,6 +118,41 @@ async def render_status(
     }
 
 
+@router.get("/{integration_id}/render/services/{service_id}/logs")
+async def render_service_logs(
+    integration_id: str,
+    service_id: str,
+    limit: int = 100,
+    type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    On-demand raw log lines for a single service - fetched only when
+    the user opens that service's log panel, not part of the cached
+    /status summary above. Intentionally uncached: logs are a live-tail
+    view, not something that should ever serve stale data out of
+    cached_scan.
+    """
+    integration = get_owned_integration(db, integration_id, current_user.id, provider="render")
+    api_key = decrypt(integration.encrypted_credentials["api_key"])
+
+    try:
+        service = RenderSyncService(api_key)
+        data = await asyncio.wait_for(
+            asyncio.get_event_loop().run_in_executor(
+                None, lambda: service.service_logs(service_id, limit=limit, log_type=type)
+            ),
+            timeout=30.0,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Render log fetch timed out.")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Render log fetch failed: {exc}")
+
+    return data
+
+
 @router.get("/{integration_id}/render/owners")
 async def render_list_owners(
     integration_id: str,

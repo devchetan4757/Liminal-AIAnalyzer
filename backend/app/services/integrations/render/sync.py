@@ -286,6 +286,63 @@ class RenderSyncService:
 
         return results
 
+    # -------------------------------------------------------------
+    # On-demand raw logs for a single service. Deliberately separate
+    # from logs() above (which is a deploy/suspension summary reused
+    # from the dashboard "stats + buckets" shape) - actual log lines
+    # are only fetched when a user opens a specific service's log
+    # view, not on every passive sync/status poll. Still read-only,
+    # same boundary as the rest of this file: log text Render already
+    # shows on the service's own log page, never env vars or secrets.
+    # -------------------------------------------------------------
+
+    def _resolve_owner_id(self, service_id: str) -> str:
+        """Render's /logs endpoint requires an explicit ownerId, unlike
+        the per-service endpoints which infer it from the service id."""
+        svc = self._get(f"/services/{service_id}")
+        svc = _unwrap(svc, "service")
+        owner_id = svc.get("ownerId") or (svc.get("owner") or {}).get("id")
+        if not owner_id:
+            raise Exception(f"Could not resolve owner for service {service_id}")
+        return owner_id
+
+    def service_logs(self, service_id: str, limit: int = 100, log_type: str = None):
+        """
+        Fetch recent raw log lines for a single service (app + build
+        output), most recent first. Called only when the user clicks
+        into a service's log panel - never as part of sync()/logs().
+        """
+        owner_id = self._resolve_owner_id(service_id)
+
+        params = {
+            "ownerId": owner_id,
+            "resource": [service_id],
+            "limit": limit,
+            "direction": "backward",
+        }
+        if log_type:
+            params["type"] = [log_type]
+
+        data = self._get("/logs", params=params)
+        entries = data.get("logs", []) if isinstance(data, dict) else (data or [])
+
+        results = []
+        for entry in entries:
+            labels = {l.get("name"): l.get("value") for l in (entry.get("labels") or [])}
+            results.append({
+                "id": entry.get("id"),
+                "timestamp": entry.get("timestamp"),
+                "message": entry.get("message"),
+                "level": labels.get("level"),
+                "type": labels.get("type"),
+            })
+
+        return {
+            "service_id": service_id,
+            "logs": results,
+            "has_more": bool(data.get("hasMore")) if isinstance(data, dict) else False,
+        }
+
     def logs(self):
         """
         Build the same "stats + buckets" shape MongoDBSyncService.logs()

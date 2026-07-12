@@ -1,6 +1,7 @@
-import { ExternalLink, CheckCircle2, XCircle, PauseCircle, PlayCircle, Cloud, GitCommit, RotateCw, Ban, Layers, Terminal, Trash2 } from 'lucide-react'
+import { ExternalLink, CheckCircle2, XCircle, PauseCircle, PlayCircle, Cloud, GitCommit, RotateCw, Ban, Layers, Terminal, Trash2, ScrollText } from 'lucide-react'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
+import { Button } from '../ui/Button'
 import { AddToWatchlistButton } from '../watchlist/AddToWatchlistButton'
 import { RemoteActionButton } from '../actions/RemoteActionButton'
 
@@ -137,7 +138,7 @@ export function DeployList({ items, emptyMessage, integrationId, allowRollback, 
   )
 }
 
-export function ServiceList({ items, emptyMessage, integrationId, onChanged }) {
+export function ServiceList({ items, emptyMessage, integrationId, onChanged, onViewLogs }) {
   if (!items?.length) return <EmptyState message={emptyMessage} />
 
   return (
@@ -162,6 +163,12 @@ export function ServiceList({ items, emptyMessage, integrationId, onChanged }) {
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {onViewLogs && (
+                  <Button variant="secondary" size="sm" onClick={() => onViewLogs(svc)}>
+                    <ScrollText size={13} />
+                    View logs
+                  </Button>
+                )}
                 {integrationId && !suspended && (
                   <RemoteActionButton
                     integrationId={integrationId}
