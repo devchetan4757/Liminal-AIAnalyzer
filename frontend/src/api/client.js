@@ -509,3 +509,48 @@ export async function deleteWatchlistItem(id) {
     throw new Error(extractErrorMessage(err))
   }
 }
+
+// --- Security Posture -----------------------------------------------------
+// Append this block to src/api/client.js (e.g. right after the Watchlist
+// section) -- not a standalone file, just kept separate here for a clean
+// diff. Talks to backend/app/routers/posture.py.
+
+export async function getPosture(integrationId) {
+  try {
+    const { data } = await api.get(`/posture/${integrationId}`)
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function getPostureHistory(integrationId, { limit } = {}) {
+  try {
+    const { data } = await api.get(`/posture/${integrationId}/history`, {
+      params: { limit },
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function triggerPostureScan(integrationId) {
+  try {
+    const { data } = await api.post(`/posture/${integrationId}/scan`, null, {
+      timeout: 45000,
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function resolveFinding(findingId) {
+  try {
+    const { data } = await api.post(`/posture/findings/${findingId}/resolve`)
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}

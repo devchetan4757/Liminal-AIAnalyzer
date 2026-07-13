@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
 import { useResizablePanel } from '../hooks/useResizablePanel'
+import { PostureSection } from '../components/PostureSection'
 import GitHubDashboard from './GitHubDashboard'
 import MongoDBDashboard from './MongoDBDashboard'
 import RenderDashboard from './RenderDashboard'
@@ -652,24 +653,35 @@ export default function ConnectedApps() {
               .env pushes, vulnerable dependencies, failed deploys, and more.
             </p>
           </div>
-         ) : selected.provider === 'mongodb' ? (
-          <MongoDBDashboard integration={selected} />
-        ) : selected.provider === 'render' ? (
-          <RenderDashboard integration={selected} />
-        ) : selected.provider === 'netlify' ? (
-          <NetlifyDashboard integration={selected} />
-        ) : selected.provider === 'uptimerobot' ? (
-          <UptimeRobotDashboard integration={selected} />
-        ) : selected.provider === 'neon' ? (
-          <NeonDashboard integration={selected} />
-        ) : selected.provider === 'vercel' ? (
-          <VercelDashboard integration={selected} />
-        ) : selected.provider === 'supabase' ? (
-          <SupabaseDashboard integration={selected} />
-        ) : (
-          <GitHubDashboard integration={selected} />
+         ) : (
+          <div className="flex h-full flex-col overflow-y-auto">
+            {/* Posture is provider-agnostic, so it's mounted once here
+                rather than duplicated into every per-provider dashboard. */}
+            <div className="border-b border-border p-6">
+              <PostureSection integration={selected} />
+            </div>
+            <div className="flex-1">
+              {selected.provider === 'mongodb' ? (
+                <MongoDBDashboard integration={selected} />
+              ) : selected.provider === 'render' ? (
+                <RenderDashboard integration={selected} />
+              ) : selected.provider === 'netlify' ? (
+                <NetlifyDashboard integration={selected} />
+              ) : selected.provider === 'uptimerobot' ? (
+                <UptimeRobotDashboard integration={selected} />
+              ) : selected.provider === 'neon' ? (
+                <NeonDashboard integration={selected} />
+              ) : selected.provider === 'vercel' ? (
+                <VercelDashboard integration={selected} />
+              ) : selected.provider === 'supabase' ? (
+                <SupabaseDashboard integration={selected} />
+              ) : (
+                <GitHubDashboard integration={selected} />
+              )}
+            </div>
+          </div>
         )}
-        
+
       </div>
 
       {showModal && (

@@ -6,6 +6,7 @@ from sqlalchemy import (
     String,
     Boolean,
     DateTime,
+    Integer,
     JSON,
     Text,
     ForeignKey,
@@ -130,6 +131,11 @@ class Integration(Base):
 
     cached_scan_at = Column(DateTime)
 
+    # Required by the credential-age posture check (see
+    # core/posture/checks/credential_age.py). Nullable + falls back to
+    # created_at in that check so existing rows don't need a backfill.
+    credentials_rotated_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=_now)
 
     updated_at = Column(DateTime, default=_now)
@@ -152,6 +158,11 @@ class Integration(Base):
     remote_actions = relationship(
         "RemoteAction",
         backref="integration",
+        cascade="all, delete",
+    )
+    security_findings = relationship(
+        "SecurityFinding",
+        back_populates="integration",
         cascade="all, delete",
     )
 
@@ -310,3 +321,47 @@ class RemoteAction(Base):
     requested_at = Column(DateTime, default=_now)
 
     completed_at = Column(DateTime, nullable=True)
+
+
+# ==========================================================
+# Security Posture
+# ==========================================================
+# Backs the /api/posture routes (routers/posture.py) and the scan
+# pipeline (core/posture/scan.py). A scan diffs freshly-run checks
+# against existing *open* SecurityFinding rows (keyed on
+# category+title) and snapshots a score afterward -- see scan.py's
+# docstring for the full flow.
+
+class SecurityFinding(Base):
+    __tablename__ = "security_findings"
+
+    id = Column(String, primary_key=True, default=_uuid)
+
+    integration_id = Column(String, ForeignKey("integrations.id"), nullable=False, index=True)
+    integration = relationship("Integration", back_populates="security_findings")
+
+    category = Column(String, nullable=False, index=True)
+    # "misconfig" | "secret_leak" | "vuln_dependency" | "anomaly" | "credential_age"
+
+    severity = Column(String, nullable=False, index=True)
+    # "low" | "medium" | "high" | "critical"
+
+    title = Column(String, nullable=False)
+    detail = Column(JSON, nullable=True)
+
+    status = Column(String, default="open", index=True)  # "open" | "resolved"
+
+    detected_at = Column(DateTime, default=_now)
+    resolved_at = Column(DateTime, nullable=True)
+
+
+class PostureScore(Base):
+    __tablename__ = "posture_scores"
+
+    id = Column(String, primary_key=True, default=_uuid)
+
+    integration_id = Column(String, ForeignKey("integrations.id"), nullable=False, index=True)
+
+    score = Column(Integer, nullable=False)  # 0-100
+    computed_at = Column(DateTime, default=_now, index=True)
+    breakdown = Column(JSON, nullable=True)
