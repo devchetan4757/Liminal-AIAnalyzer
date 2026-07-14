@@ -22,6 +22,10 @@ most recently analyzed indicator unless they clearly introduce a new one.
 - Be thorough. Do not artificially shorten your answers -- explain the reasoning, cite specific \
 detections/engines/tags when present, and give concrete next steps.
 - Never invent data that isn't present in the threat-intel JSON you're given.
+- You may also receive a system message listing the user's connected integrations and current \
+security posture (scores, open findings). Use it to answer questions about their environment \
+(e.g. "what's my GitHub posture score", "do I have any critical findings"). Never invent \
+integrations, scores, or findings not present in that context.
 """
 
 SUMMARY_PROMPT = """A user submitted an indicator for analysis: {indicator_type} = {indicator}
@@ -71,10 +75,20 @@ rather than guessing.
 
 
 def _build_messages(session_id: str, user_text: str, extra_system=None):
-    """Compose the message list sent to Groq: system + prior turns + new user turn."""
+    """Compose the message list sent to Groq: system + prior turns + new user turn.
+
+    extra_system may be a single string, a list of strings, or None/falsy
+    entries mixed in (callers can pass e.g. [integration_context,
+    followup_context] without each one checking the other for None first).
+    """
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
     if extra_system:
-        messages.append({"role": "system", "content": extra_system})
+        extras = [extra_system] if isinstance(extra_system, str) else extra_system
+        for extra in extras:
+            if extra:
+                messages.append({"role": "system", "content": extra})
+
     messages.extend(memory.get_history(session_id))
     messages.append({"role": "user", "content": user_text})
     return messages
@@ -147,23 +161,27 @@ def summarize_analysis(indicator_type: str, indicator: str, raw: dict, session_i
     return structured
 
 
-def answer_question(text: str, session_id: str = None) -> str:
+def answer_question(text: str, session_id: str = None, extra_system: str = None) -> str:
     if not client:
         return "AI answers unavailable (no GROQ_API_KEY configured on the backend)."
 
     last_analysis = memory.get_last_analysis(session_id) if session_id else None
 
     if last_analysis:
-        extra_system = FOLLOWUP_WITH_ANALYSIS_PROMPT.format(
+        followup_context = FOLLOWUP_WITH_ANALYSIS_PROMPT.format(
             indicator_type=last_analysis["indicator_type"],
             indicator=last_analysis["indicator"],
             summary=last_analysis["summary"],
             raw_json=json.dumps(last_analysis["raw"])[:20000],
         )
     else:
-        extra_system = None
+        followup_context = None
 
-    messages = _build_messages(session_id or "anon", text, extra_system=extra_system)
+    messages = _build_messages(
+        session_id or "anon",
+        text,
+        extra_system=[extra_system, followup_context],
+    )
 
     response = client.chat.completions.create(
         model=MODEL,

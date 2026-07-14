@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 import os
 
 from app.routers import posture
+from app.routers import conversations
 from app.config import settings
 from app.db.session import init_db
 from app.routers import analyze, chat, auth, history, integrations, mongodb, render, uptimerobot, neon, watchlist, remote_actions, netlify, vercel, supabase
@@ -22,6 +23,7 @@ app.add_middleware(
 # ROUTES
 # =========================
 app.include_router(posture.router)
+app.include_router(conversations.router)
 app.include_router(integrations.router)
 app.include_router(mongodb.router)
 app.include_router(render.router)

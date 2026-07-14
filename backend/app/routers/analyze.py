@@ -9,8 +9,10 @@ from app.core import llm, memory
 from app.core.aggregator import aggregate, quick_score
 from app.core.indicator import sha256_of_file
 from app.core.deps import get_current_user
+from app.core.ownership import get_owned_conversation
 from app.db.session import get_db
 from app.db.models import User
+from app.db import crud
 from app.db.crud import save_analysis
 from app.models.schemas import HashLookupRequest, IndicatorLookupRequest
 from app.services import virustotal
@@ -20,6 +22,14 @@ router = APIRouter()
 # Anything goes for *hashing* purposes, but we cap size to keep the API responsive
 # and avoid someone uploading a multi-GB file to a free-tier backend.
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+def _get_or_create_conversation(db: Session, conversation_id: str | None, user: User):
+    """Same pattern as routers/chat.py -- kept local rather than imported
+    to avoid a chat.py <-> analyze.py import cycle."""
+    if conversation_id:
+        return get_owned_conversation(db, conversation_id, user.id)
+    return crud.create_conversation(db, user.id)
 
 
 async def _build_analysis(indicator_type: str, indicator: str, session_id: str = None):
@@ -42,7 +52,7 @@ async def _build_analysis(indicator_type: str, indicator: str, session_id: str =
         "sources": sources,
         "raw": raw,
         "found": True,
-        "session_id": session_id,
+        "conversation_id": session_id,
     }
 
 
@@ -53,7 +63,9 @@ async def analyze_indicator(
     current_user: User = Depends(get_current_user),
 ):
     """Manual analysis entry point -- type is explicit, not auto-detected.
-    This is what the Manual Analysis page calls directly, independent of chat.
+    This is what the Manual Analysis page calls directly, independent of chat,
+    so it intentionally stays on its own ephemeral session_id rather than
+    the persisted Conversation model (see docs/ai-context-and-conversations.md).
     """
     indicator_type = req.indicator_type.strip().lower()
     if indicator_type not in {"hash", "url", "ip", "domain"}:
@@ -77,7 +89,7 @@ async def analyze_indicator(
             "session_id": session_id,
         }
 
-    save_analysis(db, result, user_id=current_user.id)
+    save_analysis(db, result, session_id=session_id, user_id=current_user.id)
     return result
 
 
@@ -88,28 +100,45 @@ async def analyze_hash(
     current_user: User = Depends(get_current_user),
 ):
     """Step 1: frontend computed the SHA256 client-side, no file left the browser yet."""
-    session_id = req.session_id or str(uuid.uuid4())
+    conversation = _get_or_create_conversation(db, req.conversation_id, current_user)
+    session_id = conversation.id
+
+    crud.append_message(
+        db, conversation, role="user",
+        content=f"[Uploaded file: {req.filename or 'unnamed'} (hash {req.hash[:16]}…)]",
+        message_type="file",
+    )
+
     try:
         result = await _build_analysis("hash", req.hash, session_id=session_id)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Threat-intel lookup failed: {exc}")
 
     if result is None:
+        crud.append_message(
+            db, conversation, role="assistant",
+            content="not_found", message_type="text",
+        )
         return {
             "type": "text",
             "content": "not_found",
             "found": False,
-            "session_id": session_id,
+            "conversation_id": session_id,
         }
 
-    save_analysis(db, result, user_id=current_user.id)
+    analysis_row = save_analysis(db, result, session_id=session_id, user_id=current_user.id)
+    crud.append_message(
+        db, conversation, role="assistant",
+        content=result["headline"], message_type="analysis",
+        analysis_id=analysis_row.id,
+    )
     return result
 
 
 @router.post("/upload")
 async def analyze_upload(
     file: UploadFile = File(...),
-    session_id: str = Form(default=None),
+    conversation_id: str = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -120,7 +149,8 @@ async def analyze_upload(
     embedded content. We don't reject by file type. We do cap size and we surface real
     errors instead of swallowing them.
     """
-    session_id = session_id or str(uuid.uuid4())
+    conversation = _get_or_create_conversation(db, conversation_id, current_user)
+    session_id = conversation.id
 
     contents = await file.read()
     if len(contents) == 0:
@@ -156,7 +186,12 @@ async def analyze_upload(
         )
 
     if result is not None:
-        save_analysis(db, result, user_id=current_user.id)
+        analysis_row = save_analysis(db, result, session_id=session_id, user_id=current_user.id)
+        crud.append_message(
+            db, conversation, role="assistant",
+            content=result["headline"], message_type="analysis",
+            analysis_id=analysis_row.id,
+        )
         return result
 
     # Nothing in our threat-intel sources knows this hash. Submit the actual
@@ -166,15 +201,17 @@ async def analyze_upload(
 
     if submission is None:
         # No VT_API_KEY configured -- fall back to the old "not found" message.
+        content = (
+            f"File hash {file_hash} wasn't found in any free threat-intel database. "
+            "That means it's either brand new/unseen or benign -- no automatic verdict "
+            "is available from these sources."
+        )
+        crud.append_message(db, conversation, role="assistant", content=content)
         return {
             "type": "text",
-            "content": (
-                f"File hash {file_hash} wasn't found in any free threat-intel database. "
-                "That means it's either brand new/unseen or benign -- no automatic verdict "
-                "is available from these sources."
-            ),
+            "content": content,
             "found": False,
-            "session_id": session_id,
+            "conversation_id": session_id,
         }
 
     if "error" in submission:
@@ -190,30 +227,36 @@ async def analyze_upload(
         filename=file.filename or "upload",
     )
 
+    content = (
+        f"This file ({file.filename or file_hash[:16] + '…'}) hasn't been seen by any "
+        "threat-intel source before. Submitting it to VirusTotal's sandbox for live "
+        "analysis -- this can take anywhere from 30 seconds to a few minutes."
+    )
+    crud.append_message(db, conversation, role="assistant", content=content)
+
     return {
         "type": "sandbox_pending",
-        "content": (
-            f"This file ({file.filename or file_hash[:16] + '…'}) hasn't been seen by any "
-            "threat-intel source before. Submitting it to VirusTotal's sandbox for live "
-            "analysis -- this can take anywhere from 30 seconds to a few minutes."
-        ),
+        "content": content,
         "analysis_id": submission["analysis_id"],
         "file_hash": file_hash,
-        "session_id": session_id,
+        "conversation_id": session_id,
         "found": False,
     }
 
 
 @router.get("/sandbox-status")
 async def sandbox_status(
-    session_id: str,
+    conversation_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Poll this to check on a pending VT sandbox submission for this session."""
+    """Poll this to check on a pending VT sandbox submission for this conversation."""
+    conversation = get_owned_conversation(db, conversation_id, current_user.id)
+    session_id = conversation.id
+
     job = memory.get_pending_sandbox_job(session_id)
     if not job:
-        raise HTTPException(status_code=404, detail="No pending sandbox job for this session.")
+        raise HTTPException(status_code=404, detail="No pending sandbox job for this conversation.")
 
     status_result = await virustotal.get_analysis_status(job["analysis_id"])
 
@@ -234,7 +277,7 @@ async def sandbox_status(
         return {
             "type": "sandbox_status",
             "status": status,
-            "session_id": session_id,
+            "conversation_id": session_id,
         }
 
     # Analysis finished -- fetch the full report and build the same structured
@@ -251,16 +294,23 @@ async def sandbox_status(
 
     if result is None:
         # Sandbox ran but produced no report data we could fetch (rare).
+        content = (
+            f"VirusTotal finished analyzing {job['filename']}, but no report data "
+            "could be retrieved. It may still be processing on VirusTotal's side -- "
+            "try checking again in a moment."
+        )
+        crud.append_message(db, conversation, role="assistant", content=content)
         return {
             "type": "text",
-            "content": (
-                f"VirusTotal finished analyzing {job['filename']}, but no report data "
-                "could be retrieved. It may still be processing on VirusTotal's side -- "
-                "try checking again in a moment."
-            ),
+            "content": content,
             "found": False,
-            "session_id": session_id,
+            "conversation_id": session_id,
         }
 
-    save_analysis(db, result, user_id=current_user.id)
+    analysis_row = save_analysis(db, result, session_id=session_id, user_id=current_user.id)
+    crud.append_message(
+        db, conversation, role="assistant",
+        content=result["headline"], message_type="analysis",
+        analysis_id=analysis_row.id,
+    )
     return result

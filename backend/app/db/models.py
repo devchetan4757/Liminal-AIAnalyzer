@@ -47,6 +47,7 @@ class User(Base):
     integrations = relationship("Integration", back_populates="owner", cascade="all, delete")
     analyses = relationship("Analysis", back_populates="owner", cascade="all, delete")
     incidents = relationship("Incident", back_populates="owner", cascade="all, delete")
+    conversations = relationship("Conversation", back_populates="owner", cascade="all, delete")
 
 
 # ==========================================================
@@ -365,3 +366,58 @@ class PostureScore(Base):
     score = Column(Integer, nullable=False)  # 0-100
     computed_at = Column(DateTime, default=_now, index=True)
     breakdown = Column(JSON, nullable=True)
+
+
+# ==========================================================
+# Conversations (saved chat history)
+# ==========================================================
+# Backs routers/conversations.py + the chat/analyze flows. Replaces the
+# old "session_id only lives in an in-process dict" approach -- the dict
+# in core/memory.py is still used as a fast working-memory cache for the
+# LLM within a request, but every turn is now durably persisted here too,
+# keyed by conversation_id (which doubles as the memory.py session_id).
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id = Column(String, primary_key=True, default=_uuid)
+
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    owner = relationship("User", back_populates="conversations")
+
+    title = Column(String, nullable=True)
+    # Auto-generated from the first user message once it arrives (see
+    # crud.append_message) -- null until then, rendered as "New chat".
+
+    created_at = Column(DateTime, default=_now, index=True)
+    last_message_at = Column(DateTime, default=_now, index=True)
+    # Drives sidebar ordering -- most recently active conversation first.
+
+    messages = relationship(
+        "ConversationMessage",
+        back_populates="conversation",
+        cascade="all, delete",
+        order_by="ConversationMessage.created_at",
+    )
+
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_messages"
+
+    id = Column(String, primary_key=True, default=_uuid)
+
+    conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False, index=True)
+    conversation = relationship("Conversation", back_populates="messages")
+
+    role = Column(String, nullable=False)  # "user" | "assistant"
+    content = Column(Text, nullable=False)
+
+    message_type = Column(String, default="text")  # "text" | "analysis" | "file"
+
+    # Set only for message_type="analysis" -- lets a resumed conversation
+    # re-render the full analysis card (verdict/findings/sources/etc.)
+    # by joining back to the Analysis row, instead of duplicating that
+    # JSON into every message row.
+    analysis_id = Column(String, ForeignKey("analyses.id"), nullable=True)
+
+    created_at = Column(DateTime, default=_now, index=True)

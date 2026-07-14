@@ -4,14 +4,18 @@ from pydantic import BaseModel
 
 class ChatMessage(BaseModel):
     text: str
-    session_id: Optional[str] = None
+    # Renamed from session_id -- this now refers to a real, persisted
+    # Conversation row (see routers/conversations.py), not just an
+    # in-memory key. Still optional: chat.py mints a new Conversation if
+    # this is omitted, so "just start typing" still works.
+    conversation_id: Optional[str] = None
 
 
 class HashLookupRequest(BaseModel):
     hash: str
     filename: Optional[str] = None
     size: Optional[int] = None
-    session_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
 
 class IndicatorLookupRequest(BaseModel):
@@ -42,3 +46,9 @@ class TextResult(BaseModel):
     content: str
     found: Optional[bool] = None
     offerUpload: Optional[bool] = None
+
+
+# --- Conversations ----------------------------------------------------
+
+class ConversationRenameRequest(BaseModel):
+    title: str

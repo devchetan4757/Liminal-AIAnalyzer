@@ -3,17 +3,17 @@ import { Button } from './ui/Button'
 
 export default function Header({ onClearChat }) {
   return (
-    <header className="flex items-center justify-between border-b border-border px-4 py-3 bg-bg-raised">
+    <header className="flex items-center justify-between border-b border-border bg-bg-raised px-4 py-3">
       <div className="flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent-soft text-accent">
           <Bot size={22} strokeWidth={2} />
         </div>
 
         <div>
-          <h1 className="text-sm font-semibold text-text leading-tight">
+          <h1 className="text-sm font-semibold leading-tight text-text">
             Liminal
           </h1>
-          <p className="text-xs text-text-faint leading-tight">
+          <p className="text-xs leading-tight text-text-faint">
             Your intelligent AI assistant
           </p>
         </div>

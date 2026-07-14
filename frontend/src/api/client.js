@@ -14,23 +14,6 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-const SESSION_KEY = 'malware-chatbot-session-id'
-
-export function getSessionId() {
-  let id = sessionStorage.getItem(SESSION_KEY)
-  if (!id) {
-    id = crypto.randomUUID()
-    sessionStorage.setItem(SESSION_KEY, id)
-  }
-  return id
-}
-
-export function resetSessionId() {
-  const id = crypto.randomUUID()
-  sessionStorage.setItem(SESSION_KEY, id)
-  return id
-}
-
 function extractErrorMessage(err) {
   const detail = err?.response?.data?.detail
 
@@ -90,11 +73,11 @@ export function logout() {
   localStorage.removeItem('username')
 }
 
-export async function sendMessage(text) {
+export async function sendMessage(text, conversationId) {
   try {
     const { data } = await api.post('/chat/message', {
       text,
-      session_id: getSessionId(),
+      conversation_id: conversationId,
     })
     return data
   } catch (err) {
@@ -102,13 +85,13 @@ export async function sendMessage(text) {
   }
 }
 
-export async function analyzeHash({ hash, filename, size }) {
+export async function analyzeHash({ hash, filename, size }, conversationId) {
   try {
     const { data } = await api.post('/analyze/hash', {
       hash,
       filename,
       size,
-      session_id: getSessionId(),
+      conversation_id: conversationId,
     })
     return data
   } catch (err) {
@@ -121,7 +104,6 @@ export async function analyzeIndicator({ indicator_type, indicator }) {
     const { data } = await api.post('/analyze/indicator', {
       indicator_type,
       indicator,
-      session_id: getSessionId(),
     })
     return data
   } catch (err) {
@@ -129,11 +111,11 @@ export async function analyzeIndicator({ indicator_type, indicator }) {
   }
 }
 
-export async function analyzeUpload(file) {
+export async function analyzeUpload(file, conversationId) {
   try {
     const form = new FormData()
     form.append('file', file)
-    form.append('session_id', getSessionId())
+    form.append('conversation_id', conversationId)
 
     const { data } = await api.post('/analyze/upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -145,11 +127,58 @@ export async function analyzeUpload(file) {
   }
 }
 
-export async function checkSandboxStatus() {
+export async function checkSandboxStatus(conversationId) {
   try {
     const { data } = await api.get('/analyze/sandbox-status', {
-      params: { session_id: getSessionId() },
+      params: { conversation_id: conversationId },
     })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// --- Conversations (saved chat history / New Chat) ------------------------
+
+export async function listConversations() {
+  try {
+    const { data } = await api.get('/conversations')
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function createConversation() {
+  try {
+    const { data } = await api.post('/conversations')
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function getConversation(conversationId) {
+  try {
+    const { data } = await api.get(`/conversations/${conversationId}`)
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function deleteConversation(conversationId) {
+  try {
+    const { data } = await api.delete(`/conversations/${conversationId}`)
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function renameConversation(conversationId, title) {
+  try {
+    const { data } = await api.patch(`/conversations/${conversationId}`, { title })
     return data
   } catch (err) {
     throw new Error(extractErrorMessage(err))

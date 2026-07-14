@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.db.models import Integration
+from app.db.models import Integration, Conversation
 
 
 def get_owned_integration(
@@ -31,3 +31,22 @@ def get_owned_integration(
         raise HTTPException(status_code=400, detail=f"Only available for {provider} integrations.")
 
     return integration
+
+
+def get_owned_conversation(
+    db: Session,
+    conversation_id: str,
+    user_id: str,
+) -> Conversation:
+    """Same pattern as get_owned_integration - a conversation belonging to
+    a different account is indistinguishable from one that doesn't exist."""
+    conversation = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id, Conversation.user_id == user_id)
+        .first()
+    )
+
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+
+    return conversation

@@ -91,3 +91,21 @@ def clear_pending_sandbox_job(session_id: str):
 def clear_session(session_id: str):
     with _lock:
         _store.pop(session_id, None)
+
+
+def hydrate(session_id: str, turns: list[dict]):
+    """Replay persisted ConversationMessage rows into the in-RAM session on
+    first touch after a restart (or when resuming a conversation that was
+    never loaded into memory yet in this process).
+
+    Only fills `turns` if the in-memory session is currently empty, so this
+    is always safe to call defensively before every chat/analyze request --
+    it's a no-op once the session is already warm. `last_analysis` (used
+    for indicator follow-ups) intentionally isn't reconstructed here; it's
+    a minor loss of context across a restart, not a correctness issue, and
+    keeps this replay cheap and simple.
+    """
+    session = get_session(session_id)
+    if session["turns"]:
+        return
+    session["turns"] = list(turns[-(MAX_TURNS * 2):])
