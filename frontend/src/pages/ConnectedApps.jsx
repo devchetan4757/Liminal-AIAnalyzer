@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, X, Github, Database, Cloud, Globe, Activity, Plug, Trash2, RefreshCw, CheckCircle2, AlertCircle, ChevronLeft, ChevronRight, Triangle, Zap } from 'lucide-react'
+import { Plus, X, Github, Database, Cloud, Globe, Activity, Plug, Trash2, RefreshCw, CheckCircle2, AlertCircle, ChevronLeft, ChevronRight, ChevronDown, Triangle, Zap } from 'lucide-react'
 import { getIntegrations, createIntegration, syncIntegration, deleteIntegration } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -24,6 +24,17 @@ const PROVIDER_ICON = {
   neon: Database,
   vercel: Triangle,
   supabase: Zap,
+}
+
+const DASHBOARD_COMPONENT = {
+  github: GitHubDashboard,
+  mongodb: MongoDBDashboard,
+  render: RenderDashboard,
+  netlify: NetlifyDashboard,
+  uptimerobot: UptimeRobotDashboard,
+  neon: NeonDashboard,
+  vercel: VercelDashboard,
+  supabase: SupabaseDashboard,
 }
 
 // Single source of truth for the connect modal: label, icon, auth type,
@@ -247,6 +258,42 @@ function groupByCategory(items, getCategory) {
   })
 }
 
+// Buckets connected `integrations` by their exact provider (github,
+// render, netlify, ...) rather than by category, so services that share
+// a category (e.g. Render/Netlify/Vercel under "Web Hosting") never get
+// merged into one list. Provider groups are still sorted by category
+// order first, then alphabetically by provider label within that
+// category, so related services stay near each other on screen.
+function groupByProvider(integrations) {
+  const groups = new Map()
+  for (const item of integrations) {
+    const key = item.provider
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(item)
+  }
+  return [...groups.entries()].sort(([a], [b]) => {
+    const pa = PROVIDERS.find(p => p.key === a)
+    const pb = PROVIDERS.find(p => p.key === b)
+    const ca = CATEGORY_ORDER.indexOf(pa?.category || '')
+    const cb = CATEGORY_ORDER.indexOf(pb?.category || '')
+    const ra = ca === -1 ? CATEGORY_ORDER.length : ca
+    const rb = cb === -1 ? CATEGORY_ORDER.length : cb
+    if (ra !== rb) return ra - rb
+    return (pa?.label || a).localeCompare(pb?.label || b)
+  })
+}
+
+// Turns a display name like "Production Render" into a 2-letter initial
+// ("PR") for the small circular badges shown when a provider group is
+// expanded inline in the collapsed icon rail. Falls back to the first
+// two characters for single-word names.
+function getInitials(name) {
+  if (!name) return '?'
+  const words = name.trim().split(/\s+/)
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
+  return (words[0][0] + words[1][0]).toUpperCase()
+}
+
 function timeAgo(iso) {
   if (!iso) return 'Never synced'
   const mins = Math.floor((Date.now() - new Date(iso)) / 60000)
@@ -393,7 +440,6 @@ function ConnectModal({ onClose, onConnected }) {
   )
 }
 
-
 function IntegrationRow({ integration, active, collapsed, onSelect, onDelete, onSync }) {
   const [syncing, setSyncing] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -437,7 +483,7 @@ function IntegrationRow({ integration, active, collapsed, onSelect, onDelete, on
           : 'border-border bg-bg-raised hover:border-accent/40'
       }`}
     >
-    <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-2">
         {(() => {
           const Icon = PROVIDER_ICON[integration.provider] || Plug
           return <Icon size={16} className={active ? 'text-accent' : 'text-text-dim'} />
@@ -446,7 +492,7 @@ function IntegrationRow({ integration, active, collapsed, onSelect, onDelete, on
           {integration.display_name}
         </span>
       </div>
-      
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           {integration.status === 'connected'
@@ -484,6 +530,32 @@ export default function ConnectedApps() {
   const [loading, setLoading]           = useState(true)
   const [selected, setSelected]         = useState(null)
   const [showModal, setShowModal]       = useState(false)
+
+  // Accordion state for the per-provider groups in the left list — closed
+  // by default so an account with many services doesn't turn into one
+  // long scroll. Each provider (GitHub, Render, Netlify, ...) gets its
+  // own section, keyed by provider key rather than category, so tapping
+  // "Render" only opens Render's connected instances and never mixes in
+  // Netlify/Vercel just because they share the "Web Hosting" category.
+  // Opening one provider doesn't close the others; the user controls how
+  // many stay open at once.
+  const [openProviders, setOpenProviders] = useState(() => new Set())
+
+  const toggleProvider = (providerKey) => {
+    setOpenProviders(prev => {
+      const next = new Set(prev)
+      if (next.has(providerKey)) next.delete(providerKey)
+      else next.add(providerKey)
+      return next
+    })
+  }
+
+  // If the user selects/loads an integration whose provider section is
+  // collapsed, open that section so the selection isn't hidden.
+  useEffect(() => {
+    if (!selected) return
+    setOpenProviders(prev => (prev.has(selected.provider) ? prev : new Set(prev).add(selected.provider)))
+  }, [selected])
 
   const load = async () => {
     setLoading(true)
@@ -532,6 +604,8 @@ export default function ConnectedApps() {
     collapsedWidth: 64,
     collapseSnapThreshold: 140,
   })
+
+  const SelectedDashboard = selected ? DASHBOARD_COMPONENT[selected.provider] : null
 
   return (
     <div className="flex h-full">
@@ -594,33 +668,128 @@ export default function ConnectedApps() {
             </div>
           )}
 
-          <div className="flex flex-col gap-4">
-            {groupByCategory(integrations, (i) => categoryForProvider(i.provider)).map(([category, items]) => (
-              <div key={category}>
-                {!panelCollapsed && (
-                  <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-text-faint">
-                    {category}
+          {!loading && integrations.length > 0 && (
+            <div className="flex flex-col gap-1">
+              {(() => {
+                const grouped = groupByProvider(integrations)
+                return grouped.map(([providerKey, items], groupIndex) => {
+                const provider = PROVIDERS.find(p => p.key === providerKey)
+                const ProviderIcon = provider?.icon || PROVIDER_ICON[providerKey] || Plug
+                const providerLabel = provider?.label || providerKey
+                // Insert a divider whenever the category changes from the
+                // previous group, so related providers (e.g. Render,
+                // Netlify, Vercel under Web Hosting) still visually cluster
+                // even though each keeps its own separate section.
+                const prevCategory = groupIndex > 0 ? categoryForProvider(grouped[groupIndex - 1][0]) : null
+                const currentCategory = categoryForProvider(providerKey)
+                const isNewCategory = groupIndex > 0 && prevCategory !== currentCategory
+                const isOpen = openProviders.has(providerKey)
+
+                if (panelCollapsed) {
+                  // Icon rail: exactly ONE icon per provider, regardless of
+                  // how many instances of that provider are connected.
+                  // Tapping it expands the group inline (no floating
+                  // window) — connected instances appear underneath as
+                  // small circular badges carrying that instance's
+                  // initials, and the rail simply grows to make room. A
+                  // divider marks a new category.
+                  const isProviderActive = selected?.provider === providerKey
+
+                  return (
+                    <div
+                      key={providerKey}
+                      className={`flex flex-col items-center gap-1.5 pb-2.5 last:pb-0 ${
+                        isNewCategory ? 'mt-2.5 border-t border-border pt-2.5' : ''
+                      }`}
+                    >
+                      <button
+                        onClick={() => toggleProvider(providerKey)}
+                        title={providerLabel}
+                        className={`relative flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${
+                          isOpen || isProviderActive
+                            ? 'border-accent bg-accent-soft text-accent'
+                            : 'border-border bg-bg-raised text-text-dim hover:border-accent/40'
+                        }`}
+                      >
+                        <ProviderIcon size={16} />
+                        {items.length > 1 && !isOpen && (
+                          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-bg-inset px-1 text-[9px] font-semibold text-text-faint">
+                            {items.length}
+                          </span>
+                        )}
+                      </button>
+
+                      {isOpen && (
+                        <div className="flex flex-col items-center gap-1.5">
+                          {items.map(integration => {
+                            const active = selected?.id === integration.id
+                            return (
+                              <button
+                                key={integration.id}
+                                onClick={() => setSelected(integration)}
+                                title={integration.display_name}
+                                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold transition-colors ${
+                                  active
+                                    ? 'border-accent bg-accent text-white'
+                                    : 'border-border bg-bg-inset text-text-dim hover:border-accent/40 hover:text-accent'
+                                }`}
+                              >
+                                {getInitials(integration.display_name)}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+
+                return (
+                  <div
+                    key={providerKey}
+                    className={`mb-1 last:mb-0 ${isNewCategory ? 'mt-2.5 border-t border-border pt-2.5' : ''}`}
+                  >
+                    <button
+                      onClick={() => toggleProvider(providerKey)}
+                      className="flex w-full items-center justify-between rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-bg-inset"
+                    >
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-text">
+                        <ProviderIcon size={14} className="text-text-dim" />
+                        {providerLabel}
+                        <span className="rounded-full bg-bg-inset px-1.5 py-0.5 text-[10px] font-medium text-text-faint">
+                          {items.length}
+                        </span>
+                      </span>
+                      <ChevronDown
+                        size={13}
+                        className={`shrink-0 text-text-faint transition-transform duration-150 ${isOpen ? '' : '-rotate-90'}`}
+                      />
+                    </button>
+
+                    {isOpen && (
+                      <div className="mt-1.5 flex flex-col gap-2 pb-1">
+                        {items.map(integration => (
+                          <IntegrationRow
+                            key={integration.id}
+                            integration={integration}
+                            active={selected?.id === integration.id}
+                            collapsed={false}
+                            onSelect={setSelected}
+                            onDelete={handleDelete}
+                            onSync={handleSync}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-                <div className="flex flex-col gap-2">
-                  {items.map(integration => (
-                    <IntegrationRow
-                      key={integration.id}
-                      integration={integration}
-                      active={selected?.id === integration.id}
-                      collapsed={panelCollapsed}
-                      onSelect={setSelected}
-                      onDelete={handleDelete}
-                      onSync={handleSync}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+                )
+                })
+              })()}
+            </div>
+          )}
         </div>
 
-        {/* Collapse/expand toggle for click users */}
+        {/* Collapse/expand toggle */}
         <button
           onClick={togglePanelCollapsed}
           title={panelCollapsed ? 'Expand panel' : 'Collapse panel'}
@@ -640,48 +809,14 @@ export default function ConnectedApps() {
         )}
       </div>
 
-      {/* right panel */}
-      <div className="flex-1 overflow-hidden">
-        {!selected ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-center px-8">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-bg-inset">
-              <Github size={26} className="text-text-faint" />
-            </div>
-            <p className="text-sm font-medium text-text">Select a connected app</p>
-            <p className="max-w-xs text-xs text-text-faint">
-              Choose an integration on the left to view its security dashboard — secret leaks,
-              .env pushes, vulnerable dependencies, failed deploys, and more.
-            </p>
-          </div>
-         ) : (
-          <div className="flex h-full flex-col overflow-y-auto">
-            {/* Posture is provider-agnostic, so it's mounted once here
-                rather than duplicated into every per-provider dashboard. */}
-            <div className="border-b border-border p-6">
-              <PostureSection integration={selected} />
-            </div>
-            <div className="flex-1">
-              {selected.provider === 'mongodb' ? (
-                <MongoDBDashboard integration={selected} />
-              ) : selected.provider === 'render' ? (
-                <RenderDashboard integration={selected} />
-              ) : selected.provider === 'netlify' ? (
-                <NetlifyDashboard integration={selected} />
-              ) : selected.provider === 'uptimerobot' ? (
-                <UptimeRobotDashboard integration={selected} />
-              ) : selected.provider === 'neon' ? (
-                <NeonDashboard integration={selected} />
-              ) : selected.provider === 'vercel' ? (
-                <VercelDashboard integration={selected} />
-              ) : selected.provider === 'supabase' ? (
-                <SupabaseDashboard integration={selected} />
-              ) : (
-                <GitHubDashboard integration={selected} />
-              )}
-            </div>
-          </div>
+      {/* right panel - selected integration's dashboard, or an overview
+          when nothing is selected yet */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {selected && SelectedDashboard ? (
+          <SelectedDashboard integration={selected} onSync={() => handleSync(selected.id)} />
+        ) : (
+          <PostureSection integrations={integrations} onSelect={setSelected} />
         )}
-
       </div>
 
       {showModal && (

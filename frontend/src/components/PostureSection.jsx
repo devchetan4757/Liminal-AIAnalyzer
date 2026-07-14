@@ -120,7 +120,7 @@ function FindingRow({ finding, onResolve }) {
 // Deliberately self-contained (own loading/error state, own data
 // fetching) so it drops into any existing dashboard page without that
 // page needing to know anything about posture scoring.
-export function PostureSection({ integration }) {
+export function PostureSection({ integration, integrations, onSelect }) {
   const [posture, setPosture] = useState(null)
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
@@ -128,6 +128,7 @@ export function PostureSection({ integration }) {
   const [error, setError] = useState('')
 
   const load = async () => {
+    if (!integration?.id) return
     setLoading(true)
     setError('')
     try {
@@ -144,7 +145,47 @@ export function PostureSection({ integration }) {
     }
   }
 
-  useEffect(() => { load() }, [integration.id])
+  useEffect(() => {
+    if (!integration?.id) return
+    load()
+  }, [integration?.id])
+
+  // Overview mode: no single integration in scope yet (e.g. the
+  // Connected Apps landing screen before anything is selected).
+  // Nothing to fetch, so just show a friendly placeholder instead of
+  // crashing on integration.id below.
+  if (!integration) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Security Posture</CardTitle>
+        </CardHeader>
+        {!integrations || integrations.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-6 text-center">
+            <ShieldQuestion size={24} className="text-text-faint" />
+            <p className="text-sm text-text-dim">No apps connected yet.</p>
+            <p className="text-xs text-text-faint">Connect an app to see its security posture.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-text-dim">Select an app on the left to view its security posture.</p>
+            <div className="flex flex-wrap gap-1.5">
+              {integrations.map(i => (
+                <Badge
+                  key={i.id}
+                  tone="neutral"
+                  className={onSelect ? 'cursor-pointer' : ''}
+                  onClick={() => onSelect?.(i)}
+                >
+                  {i.display_name}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </Card>
+    )
+  }
 
   const handleScan = async () => {
     setScanning(true)
