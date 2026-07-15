@@ -47,12 +47,26 @@ ACTIONS = {
         "resource_type": "service",
         "requires": [],
     },
-    ("render", "cancel"): {
+    ("render", "cancel_deploy"): {
         "label": "Cancel in-progress deploy",
         "consequence": "Stops this deploy before it finishes. The service keeps running whatever version it was on before.",
         "risk_tier": "low",
         "resource_type": "deploy",
         "requires": ["deploy_id"],
+    },
+    ("render", "delete"): {
+        "label": "Delete service",
+        "consequence": "Permanently deletes this service and its deploy history. Cannot be undone.",
+        "risk_tier": "high",
+        "resource_type": "service",
+        "requires": [],
+    },
+    ("render", "run_job"): {
+        "label": "Run one-off job",
+        "consequence": "Runs the given shell command against this service's current deploy environment, without changing what's already running.",
+        "risk_tier": "medium",
+        "resource_type": "service",
+        "requires": ["start_command"],
     },
     ("render", "restart"): {
         "label": "Restart service",

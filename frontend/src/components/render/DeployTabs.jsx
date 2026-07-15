@@ -1,4 +1,4 @@
-import { ExternalLink, CheckCircle2, XCircle, PauseCircle, PlayCircle, Cloud, GitCommit, RotateCw, Ban, Layers, Terminal, Trash2, ScrollText } from 'lucide-react'
+import { ExternalLink, CheckCircle2, XCircle, PauseCircle, PlayCircle, Cloud, GitCommit, RotateCw, Power, Ban, Layers, Terminal, Trash2, ScrollText } from 'lucide-react'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -187,7 +187,7 @@ export function ServiceList({ items, emptyMessage, integrationId, onChanged, onV
                     action="restart"
                     resourceId={svc.id}
                     resourceName={svc.name}
-                    icon={RotateCw}
+                    icon={Power}
                     onDone={onChanged}
                   />
                 )}
