@@ -19,7 +19,6 @@ const STATUS_TONE = {
   created: 'neutral',
 }
 
-// Deploys still running - cancel only makes sense while one of these.
 const IN_PROGRESS_STATUSES = new Set([
   'build_in_progress', 'update_in_progress', 'pre_deploy_in_progress', 'deploying', 'queued', 'created',
 ])
@@ -42,14 +41,11 @@ function EmptyState({ message }) {
   )
 }
 
-// Finds the most recent "live" deploy for this service that happened
-// before the given deploy - i.e. the rollback target. Returns null if
-// there's nothing to roll back to (no prior successful deploy known).
 function findRollbackTarget(item, allDeploys) {
   if (!allDeploys?.length) return null
-  const sameService = allDeploys.filter((d) => d.service_id === item.service_id)
-  const before = sameService.filter((d) => new Date(d.created_at) < new Date(item.created_at))
-  return before.find((d) => d.status === 'live') || null
+  const sameService = allDeploys.filter(d => d.service_id === item.service_id)
+  const before = sameService.filter(d => new Date(d.created_at) < new Date(item.created_at))
+  return before.find(d => d.status === 'live') || null
 }
 
 export function DeployList({ items, emptyMessage, integrationId, allowRollback, allDeploys, onChanged }) {
@@ -57,7 +53,7 @@ export function DeployList({ items, emptyMessage, integrationId, allowRollback, 
 
   return (
     <div className="flex flex-col gap-2">
-      {items.map((item) => {
+      {items.map(item => {
         const tone = STATUS_TONE[item.status] || 'neutral'
         const rollbackTarget = allowRollback && integrationId ? findRollbackTarget(item, allDeploys) : null
         const cancellable = integrationId && IN_PROGRESS_STATUSES.has(item.status)
@@ -87,46 +83,28 @@ export function DeployList({ items, emptyMessage, integrationId, allowRollback, 
               <div className="flex shrink-0 items-center gap-2">
                 {cancellable && (
                   <RemoteActionButton
-                    integrationId={integrationId}
-                    provider="render"
-                    action="cancel_deploy"
-                    resourceId={item.service_id}
-                    resourceName={item.service_name}
-                    extra={{ deploy_id: item.id }}
-                    icon={Ban}
-                    onDone={onChanged}
+                    integrationId={integrationId} provider="render" action="cancel_deploy"
+                    resourceId={item.service_id} resourceName={item.service_name}
+                    extra={{ deploy_id: item.id }} icon={Ban} onDone={onChanged}
                   />
                 )}
                 {rollbackTarget && (
                   <RemoteActionButton
-                    integrationId={integrationId}
-                    provider="render"
-                    action="rollback"
-                    resourceId={item.service_id}
-                    resourceName={item.service_name}
-                    extra={{ deploy_id: rollbackTarget.id }}
-                    onDone={onChanged}
+                    integrationId={integrationId} provider="render" action="rollback"
+                    resourceId={item.service_id} resourceName={item.service_name}
+                    extra={{ deploy_id: rollbackTarget.id }} onDone={onChanged}
                   />
                 )}
                 {tone === 'danger' && integrationId && (
                   <AddToWatchlistButton
-                    integrationId={integrationId}
-                    provider="render"
-                    resourceType="deploy"
-                    externalId={item.id}
-                    resourceName={item.service_name}
+                    integrationId={integrationId} provider="render" resourceType="deploy"
+                    externalId={item.id} resourceName={item.service_name}
                     title={`Deploy ${item.status} — ${item.service_name}`}
-                    severity="high"
-                    raw={item}
+                    severity="high" raw={item}
                   />
                 )}
-                <a
-                  href="https://dashboard.render.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-text-faint hover:text-accent transition-colors"
-                  title="Open Render"
-                >
+                <a href="https://dashboard.render.com" target="_blank" rel="noreferrer"
+                  className="text-text-faint hover:text-accent transition-colors" title="Open Render">
                   <ExternalLink size={15} />
                 </a>
               </div>
@@ -138,21 +116,45 @@ export function DeployList({ items, emptyMessage, integrationId, allowRollback, 
   )
 }
 
-export function ServiceList({ items, emptyMessage, integrationId, onChanged, onViewLogs }) {
+/**
+ * selectedId  — id of the currently selected service
+ * onSelect    — called with service object on card click
+ * onViewLogs  — called with service object on Logs button click
+ *
+ * When selectedId is set only that card is rendered; all others are hidden.
+ * Clicking the same card again (toggle) is handled by the parent.
+ */
+export function ServiceList({ items, emptyMessage, integrationId, onChanged, onViewLogs, onSelect, selectedId }) {
   if (!items?.length) return <EmptyState message={emptyMessage} />
+
+  const visible = selectedId ? items.filter(s => s.id === selectedId) : items
 
   return (
     <div className="flex flex-col gap-2">
-      {items.map((svc) => {
-        const suspended = svc.suspended && svc.suspended !== 'not_suspended'
+      {visible.map(svc => {
+        const suspended  = svc.suspended && svc.suspended !== 'not_suspended'
+        const isSelected = svc.id === selectedId
+
         return (
-          <Card key={svc.id} className={suspended ? 'border-warning/40 bg-warning-soft/20' : undefined}>
+          <Card
+            key={svc.id}
+            onClick={() => onSelect?.(svc)}
+            className={`cursor-pointer transition-colors ${
+              isSelected
+                ? 'border-accent/60 bg-accent-soft/10'
+                : suspended
+                  ? 'border-warning/40 bg-warning-soft/20 hover:border-warning/60'
+                  : 'hover:border-border/80'
+            }`}
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
                   {suspended
                     ? <Badge tone="warning"><PauseCircle size={11} /> suspended</Badge>
-                    : <Badge tone="success"><Cloud size={11} /> active</Badge>}
+                    : <Badge tone={isSelected ? 'accent' : 'success'}>
+                        <Cloud size={11} /> active
+                      </Badge>}
                   <span className="text-sm font-medium text-text truncate">{svc.name}</span>
                   <span className="text-[11px] text-text-faint capitalize">{svc.type?.replace(/_/g, ' ')}</span>
                 </div>
@@ -162,91 +164,48 @@ export function ServiceList({ items, emptyMessage, integrationId, onChanged, onV
                   </p>
                 )}
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+
+              {/* stop propagation so action buttons don't trigger card selection */}
+              <div className="flex shrink-0 items-center gap-2" onClick={e => e.stopPropagation()}>
                 {onViewLogs && (
                   <Button variant="secondary" size="sm" onClick={() => onViewLogs(svc)}>
-                    <ScrollText size={13} />
-                    View logs
+                    <ScrollText size={13} /> Logs
                   </Button>
                 )}
                 {integrationId && !suspended && (
-                  <RemoteActionButton
-                    integrationId={integrationId}
-                    provider="render"
-                    action="redeploy"
-                    resourceId={svc.id}
-                    resourceName={svc.name}
-                    icon={RotateCw}
-                    onDone={onChanged}
-                  />
+                  <RemoteActionButton integrationId={integrationId} provider="render" action="redeploy"
+                    resourceId={svc.id} resourceName={svc.name} icon={RotateCw} onDone={onChanged} />
                 )}
                 {integrationId && !suspended && (
-                  <RemoteActionButton
-                    integrationId={integrationId}
-                    provider="render"
-                    action="restart"
-                    resourceId={svc.id}
-                    resourceName={svc.name}
-                    icon={Power}
-                    onDone={onChanged}
-                  />
+                  <RemoteActionButton integrationId={integrationId} provider="render" action="restart"
+                    resourceId={svc.id} resourceName={svc.name} icon={Power} onDone={onChanged} />
                 )}
                 {integrationId && !suspended && (
-                  <RemoteActionButton
-                    integrationId={integrationId}
-                    provider="render"
-                    action="scale"
-                    resourceId={svc.id}
-                    resourceName={svc.name}
-                    icon={Layers}
-                    fields={[{ key: 'num_instances', label: 'Number of instances (1-100)', type: 'number', min: 1, max: 100, placeholder: 'e.g. 2' }]}
-                    onDone={onChanged}
-                  />
+                  <RemoteActionButton integrationId={integrationId} provider="render" action="scale"
+                    resourceId={svc.id} resourceName={svc.name} icon={Layers}
+                    fields={[{ key: 'num_instances', label: 'Number of instances (1–100)', type: 'number', min: 1, max: 100, placeholder: 'e.g. 2' }]}
+                    onDone={onChanged} />
                 )}
                 {integrationId && !suspended && (
-                  <RemoteActionButton
-                    integrationId={integrationId}
-                    provider="render"
-                    action="run_job"
-                    resourceId={svc.id}
-                    resourceName={svc.name}
-                    icon={Terminal}
+                  <RemoteActionButton integrationId={integrationId} provider="render" action="run_job"
+                    resourceId={svc.id} resourceName={svc.name} icon={Terminal}
                     fields={[{ key: 'start_command', label: 'Shell command to run', type: 'text', placeholder: 'e.g. python manage.py migrate' }]}
-                    onDone={onChanged}
-                  />
+                    onDone={onChanged} />
                 )}
                 {integrationId && (
-                  <RemoteActionButton
-                    integrationId={integrationId}
-                    provider="render"
+                  <RemoteActionButton integrationId={integrationId} provider="render"
                     action={suspended ? 'resume' : 'suspend'}
-                    resourceId={svc.id}
-                    resourceName={svc.name}
+                    resourceId={svc.id} resourceName={svc.name}
                     variant={suspended ? 'secondary' : 'danger'}
-                    icon={suspended ? PlayCircle : PauseCircle}
-                    onDone={onChanged}
-                  />
+                    icon={suspended ? PlayCircle : PauseCircle} onDone={onChanged} />
                 )}
                 {integrationId && (
-                  <RemoteActionButton
-                    integrationId={integrationId}
-                    provider="render"
-                    action="delete"
-                    resourceId={svc.id}
-                    resourceName={svc.name}
-                    variant="danger"
-                    icon={Trash2}
-                    onDone={onChanged}
-                  />
+                  <RemoteActionButton integrationId={integrationId} provider="render" action="delete"
+                    resourceId={svc.id} resourceName={svc.name} variant="danger" icon={Trash2} onDone={onChanged} />
                 )}
                 {svc.url && (
-                  <a
-                    href={svc.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0 text-text-faint hover:text-accent transition-colors"
-                    title="Open service"
-                  >
+                  <a href={svc.url} target="_blank" rel="noreferrer"
+                    className="shrink-0 text-text-faint hover:text-accent transition-colors" title="Open service">
                     <ExternalLink size={15} />
                   </a>
                 )}

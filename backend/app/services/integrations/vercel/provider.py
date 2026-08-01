@@ -8,7 +8,10 @@ class VercelProvider(IntegrationProvider):
     """
     Scope is intentionally limited to project/deployment metadata for
     security monitoring (failed builds, canceled deploys). This
-    provider has no method that reads environment variable values.
+    provider has no method that reads environment variable values -
+    create_project() (invoked via the dedicated /vercel/projects route,
+    not execute_action() below) is a deliberate, narrow exception that
+    can only *set* values the user supplies at creation time.
     """
 
     def __init__(self, api_key=None, team_id=None):

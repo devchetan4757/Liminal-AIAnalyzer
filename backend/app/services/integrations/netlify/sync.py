@@ -14,11 +14,14 @@ IN_PROGRESS_STATES = {
     "processing", "processed", "preparing", "deploying",
 }
 
-# NOTE: this service intentionally has no method that reads a site's
-# environment variables (GET /sites/{id}/env). That endpoint can return
-# plaintext secret values and has no place in a security-monitoring
-# integration - same boundary RenderSyncService and MongoDBSyncService
-# draw around their own equivalents.
+# NOTE: every *read* path in this service (sites(), deploys(), logs())
+# intentionally never fetches a site's environment variables (GET
+# /sites/{id}/env can return plaintext secret values, and has no place
+# in a security-monitoring integration - same boundary MongoDBSyncService
+# draws around its own equivalents). create_site() below is a deliberate,
+# narrow exception: it can *set* env vars the user explicitly typed/
+# pasted/uploaded at creation time, because the create-site form asked
+# for that. It still never reads existing values back.
 
 
 class NetlifySyncService:
@@ -44,11 +47,12 @@ class NetlifySyncService:
 
         return response.json()
 
-    def _post(self, path: str, json_body: dict = None, ok_statuses=(200, 201, 202, 204)):
+    def _post(self, path: str, json_body=None, ok_statuses=(200, 201, 202, 204), params: dict = None):
         response = requests.post(
             f"{NETLIFY_BASE_URL}{path}",
             headers=self.headers,
-            json=json_body or {},
+            json=json_body if json_body is not None else {},
+            params=params or {},
             timeout=20,
         )
 
@@ -222,13 +226,12 @@ class NetlifySyncService:
 
     def create_site(self, payload: dict):
         """
-        Create a new site linked to a repo.
-
-        Deliberately has no env var field in the request body even
-        though Netlify's create-site API accepts one - same boundary as
-        the rest of this file: this integration never sets or reads
-        secret values, only lifecycle/build config that isn't sensitive
-        on its own (build command, publish directory, branch).
+        Create a new site linked to a repo, then - if the caller supplied
+        any - set initial environment variables via Netlify's separate
+        environment-variables API. Env vars are NOT part of the create-site
+        request body; Netlify deprecated the old build_settings.env /
+        repo.env fields in favor of POST /accounts/{account_id}/env, which
+        is a distinct call scoped by ?site_id=.
         """
         body = {
             "name": payload.get("name") or None,
@@ -245,9 +248,57 @@ class NetlifySyncService:
         path = f"/{account_slug}/sites" if account_slug else "/sites"
 
         site = self._post(path, json_body=body, ok_statuses=(200, 201))
-        return {
+        result = {
             "id": site.get("id"),
             "name": site.get("name"),
             "url": site.get("ssl_url") or site.get("url"),
             "admin_url": site.get("admin_url"),
         }
+
+        env_vars = payload.get("env_vars") or []
+        # The env-vars endpoint is scoped by account_id (the numeric/team
+        # id), not account_slug (the human-readable one used above for
+        # site creation) - fall back to the slug only if no id was given,
+        # since Netlify accepts either in practice.
+        account_id = payload.get("account_id") or account_slug
+
+        if env_vars and result.get("id"):
+            if not account_id:
+                result["env_vars_warning"] = (
+                    "Site created, but environment variables were not set: "
+                    "no workspace/account was resolved to scope them to."
+                )
+            else:
+                try:
+                    self._set_env_vars(account_id, result["id"], env_vars)
+                except Exception as exc:
+                    # The site itself already exists at this point - a
+                    # failure here shouldn't be reported as if the whole
+                    # create-site request failed. Surface it as a warning
+                    # instead so the user knows to set vars manually.
+                    result["env_vars_warning"] = (
+                        f"Site created, but setting environment variables failed: {exc}"
+                    )
+
+        return result
+
+    def _set_env_vars(self, account_id: str, site_id: str, env_vars: list):
+        """
+        POST /accounts/{account_id}/env?site_id={site_id} - Netlify's
+        current API for creating site-scoped environment variables (the
+        createEnvVars operation). Each variable is written with a single
+        "all" context, which covers production/deploy-preview/branch-
+        deploy/dev; the user can narrow it to specific contexts later in
+        the Netlify UI if needed.
+
+        Note: Netlify's own API has a known quirk where site_id is
+        sometimes not honored and the variable ends up team-scoped
+        instead of site-scoped - this passes it exactly as documented,
+        but it's worth spot-checking the result in the Netlify dashboard
+        after creation.
+        """
+        body = [
+            {"key": e["key"], "values": [{"value": e["value"], "context": "all"}]}
+            for e in env_vars
+        ]
+        self._post(f"/accounts/{account_id}/env", json_body=body, params={"site_id": site_id})

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw, Triangle, XCircle, Layers } from 'lucide-react'
+import { RefreshCw, Triangle, XCircle, Layers, Plus } from 'lucide-react'
 import { getVercelStatus } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { DeploymentList, ProjectList } from '../components/vercel/DeployTabs'
+import { ProjectFormDialog } from '../components/vercel/ProjectFormDialog'
 
 const TABS = [
   { key: 'projects',           label: 'Projects',           statKey: 'total_projects' },
@@ -39,6 +40,7 @@ export default function VercelDashboard({ integration }) {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
   const [tab, setTab]         = useState('projects')
+  const [showNewProject, setShowNewProject] = useState(false)
 
   const load = async (opts) => {
     setLoading(true)
@@ -108,6 +110,9 @@ export default function VercelDashboard({ integration }) {
           </div>
         </div>
         <div className="flex gap-2">
+          <Button variant="primary" size="sm" onClick={() => setShowNewProject(true)}>
+            <Plus size={14} /> New project
+          </Button>
           <Button variant="secondary" size="sm" onClick={() => load({ refresh: true })} disabled={loading}>
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             Refresh
@@ -164,6 +169,14 @@ export default function VercelDashboard({ integration }) {
             />
         }
       </div>
+
+      {showNewProject && (
+        <ProjectFormDialog
+          integrationId={integration.id}
+          onClose={() => setShowNewProject(false)}
+          onSaved={() => { setShowNewProject(false); load({ refresh: true }) }}
+        />
+      )}
 
     </div>
   )

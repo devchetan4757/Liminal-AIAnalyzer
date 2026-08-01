@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { Button } from '../ui/Button'
+import { EnvVarsField, EMPTY_ENV_ROW, cleanEnvVars } from '../common/EnvVarsField'
 import { getRenderOwners, createRenderService } from '../../api/client'
 
 const SERVICE_TYPES = [
@@ -43,6 +44,7 @@ const EMPTY_FORM = {
   num_instances: 1,
   schedule: '',
   pull_request_previews: false,
+  env_vars: [EMPTY_ENV_ROW],
   advanced_config_text: '',
 }
 
@@ -136,6 +138,7 @@ export function ServiceFormDialog({ integrationId, onClose, onSaved }) {
       num_instances: isStatic ? null : Number(form.num_instances) || 1,
       schedule: isCron ? form.schedule : null,
       pull_request_previews: !isStatic ? form.pull_request_previews : null,
+      env_vars: cleanEnvVars(form.env_vars),
       advanced_config,
     }
 
@@ -303,12 +306,17 @@ export function ServiceFormDialog({ integrationId, onClose, onSaved }) {
               <input className={inputClass} value={form.root_dir} onChange={set('root_dir')} placeholder="." />
             </Field>
 
+            <EnvVarsField
+              rows={form.env_vars}
+              onChange={(rows) => setForm((f) => ({ ...f, env_vars: rows }))}
+            />
+
             <Field label="Advanced config (JSON, optional)">
               <textarea
                 className={`${inputClass} h-20 py-2 font-mono text-xs`}
                 value={form.advanced_config_text}
                 onChange={set('advanced_config_text')}
-                placeholder='{ "envVars": [...] }'
+                placeholder='{ "buildFilter": { "paths": ["src/**"] } }'
               />
             </Field>
 

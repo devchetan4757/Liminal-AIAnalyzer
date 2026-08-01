@@ -401,6 +401,33 @@ class Conversation(Base):
     )
 
 
+# ==========================================================
+# Render — Service Performance (live uptime / response-time checks)
+# ==========================================================
+# Replaces the old "CPU % + memory" panel, which called Render's
+# /metrics endpoint - that endpoint 403s on Free-tier instance types,
+# so the panel was permanently broken for most services. This instead
+# makes a real HTTP request to the service's own public URL each time
+# the panel is open/refreshed (see services/integrations/render/uptime.py)
+# and stores the result here, so a response-time/uptime history builds
+# up over time regardless of plan.
+
+class ServiceUptimeCheck(Base):
+    __tablename__ = "service_uptime_checks"
+
+    id = Column(String, primary_key=True, default=_uuid)
+
+    integration_id = Column(String, ForeignKey("integrations.id"), nullable=False, index=True)
+    service_id = Column(String, nullable=False, index=True)
+
+    checked_at = Column(DateTime, default=_now, index=True)
+
+    is_up = Column(Boolean, nullable=False)
+    status_code = Column(Integer, nullable=True)
+    response_time_ms = Column(Integer, nullable=True)
+    error = Column(String, nullable=True)  # short reason when is_up is False (timeout, DNS, etc.)
+
+
 class ConversationMessage(Base):
     __tablename__ = "conversation_messages"
 

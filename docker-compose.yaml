@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
+    environment:
+      # Same-origin via the frontend's nginx proxy, so this is mostly a
+      # fallback for direct calls to :8000 during development.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      # No DATABASE_URL set below -> falls back to a local SQLite file
+      # baked into the container's filesystem (survives `restart`/`stop`,
+      # wiped by `docker compose down -v` or a rebuild). For anything
+      # beyond a demo, set DATABASE_URL in backend/.env to a real
+      # Postgres instance (e.g. Neon) instead.
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

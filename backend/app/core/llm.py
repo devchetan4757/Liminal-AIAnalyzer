@@ -19,13 +19,17 @@ Conversation rules:
 analyzed an indicator and now asks something like "is it safe to open", "what does that mean", \
 "should I worry", or anything that references "it"/"that file"/"this", assume they mean the \
 most recently analyzed indicator unless they clearly introduce a new one.
-- Be thorough. Do not artificially shorten your answers -- explain the reasoning, cite specific \
-detections/engines/tags when present, and give concrete next steps.
+- Keep answers short and simple. Use plain, everyday words over jargon. A couple of short \
+sentences is usually enough - only go longer if the user explicitly asks for more detail or \
+step-by-step instructions.
 - Never invent data that isn't present in the threat-intel JSON you're given.
-- You may also receive a system message listing the user's connected integrations and current \
-security posture (scores, open findings). Use it to answer questions about their environment \
-(e.g. "what's my GitHub posture score", "do I have any critical findings"). Never invent \
-integrations, scores, or findings not present in that context.
+- You may also receive a system message listing the user's connected integrations, current \
+security posture (scores, open findings), and live service data pulled directly from each \
+provider - real site/project/service/monitor names, deploy or build states, and recent errors. \
+Use it to answer questions about their environment (e.g. "what's my GitHub posture score", \
+"do I have any critical findings", "which of my Netlify sites failed to deploy", "what's my \
+UptimeRobot status"), always referring to the exact names given. Never invent integrations, \
+scores, findings, service names, or states not present in that context.
 """
 
 SUMMARY_PROMPT = """A user submitted an indicator for analysis: {indicator_type} = {indicator}
@@ -161,7 +165,7 @@ def summarize_analysis(indicator_type: str, indicator: str, raw: dict, session_i
     return structured
 
 
-def answer_question(text: str, session_id: str = None, extra_system: str = None) -> str:
+def answer_question(text: str, session_id: str = None, extra_system=None) -> str:
     if not client:
         return "AI answers unavailable (no GROQ_API_KEY configured on the backend)."
 
@@ -177,15 +181,23 @@ def answer_question(text: str, session_id: str = None, extra_system: str = None)
     else:
         followup_context = None
 
+    if isinstance(extra_system, list):
+        extra_system_list = list(extra_system)
+    elif extra_system:
+        extra_system_list = [extra_system]
+    else:
+        extra_system_list = []
+    extra_system_list.append(followup_context)
+
     messages = _build_messages(
         session_id or "anon",
         text,
-        extra_system=[extra_system, followup_context],
+        extra_system=extra_system_list,
     )
 
     response = client.chat.completions.create(
         model=MODEL,
-        max_tokens=900,
+        max_tokens=500,
         messages=messages,
     )
     reply = response.choices[0].message.content

@@ -6,19 +6,20 @@ import { Button } from '../components/ui/Button'
 import { DeployList, ServiceList } from '../components/render/DeployTabs'
 import { ServiceFormDialog } from '../components/render/ServiceFormDialog'
 import { ServiceLogsPanel } from '../components/render/ServiceLogsPanel'
+import { ServiceMetricsPanel } from '../components/render/ServiceMetricsPanel'
 
 const TABS = [
-  { key: 'services',           label: 'Services',           statKey: 'total_services' },
-  { key: 'recent_deploys',      label: 'Recent Deploys',     statKey: 'recent_deploy_count' },
-  { key: 'failed_deploys',      label: 'Failed Deploys',     statKey: 'failed_deploy_count' },
-  { key: 'suspended_services',  label: 'Suspended',          statKey: 'suspended_count' },
+  { key: 'services',           label: 'Services',       statKey: 'total_services' },
+  { key: 'recent_deploys',     label: 'Recent Deploys', statKey: 'recent_deploy_count' },
+  { key: 'failed_deploys',     label: 'Failed Deploys', statKey: 'failed_deploy_count' },
+  { key: 'suspended_services', label: 'Suspended',      statKey: 'suspended_count' },
 ]
 
 const EMPTY_MESSAGE = {
-  services:          'No services found for this account.',
-  recent_deploys:    'No recent deploy activity.',
-  failed_deploys:    'No failed deploys — all green.',
-  suspended_services: 'No suspended services.',
+  services:            'No services found for this account.',
+  recent_deploys:      'No recent deploy activity.',
+  failed_deploys:      'No failed deploys — all green.',
+  suspended_services:  'No suspended services.',
 }
 
 function StatCard({ label, value, tone = 'neutral', icon: Icon }) {
@@ -39,12 +40,13 @@ function StatCard({ label, value, tone = 'neutral', icon: Icon }) {
 }
 
 export default function RenderDashboard({ integration }) {
-  const [data, setData]       = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState('')
-  const [tab, setTab]         = useState('services')
-  const [showNewService, setShowNewService] = useState(false)
-  const [logsService, setLogsService] = useState(null)
+  const [data, setData]                       = useState(null)
+  const [loading, setLoading]                 = useState(true)
+  const [error, setError]                     = useState('')
+  const [tab, setTab]                         = useState('services')
+  const [showNewService, setShowNewService]   = useState(false)
+  const [logsService, setLogsService]         = useState(null)
+  const [selectedService, setSelectedService] = useState(null)
 
   const load = async (opts) => {
     setLoading(true)
@@ -61,29 +63,38 @@ export default function RenderDashboard({ integration }) {
 
   useEffect(() => { load() }, [integration.id])
 
-  if (loading) return (
+  const handleTabChange = (key) => {
+    setTab(key)
+    if (key !== 'services') setSelectedService(null)
+  }
+
+  const handleSelectService = (svc) => {
+    // toggle: clicking the already-selected card collapses metrics
+    setSelectedService(prev => prev?.id === svc.id ? null : svc)
+  }
+
+  // ── Loading skeleton ───────────────────────────────────────────────────
+  if (loading && !data) return (
     <div className="flex h-full flex-col gap-4 p-6">
       <div className="flex gap-3">
-        {[1,2,3,4].map(i => (
+        {[1, 2, 3, 4].map(i => (
           <div key={i} className="h-20 w-32 animate-pulse rounded-lg bg-bg-inset" />
         ))}
       </div>
       <div className="flex flex-col gap-2 mt-4">
-        {[1,2,3].map(i => (
+        {[1, 2, 3].map(i => (
           <div key={i} className="h-16 animate-pulse rounded-lg bg-bg-inset" />
         ))}
       </div>
     </div>
   )
 
-  if (error) return (
+  if (error && !data) return (
     <div className="p-6">
       <Card className="border-danger/40 bg-danger-soft/20">
         <p className="text-sm text-danger font-medium mb-1">Status fetch failed</p>
         <p className="text-sm text-text-dim">{error}</p>
-        <Button variant="secondary" size="sm" className="mt-3" onClick={load}>
-          Retry
-        </Button>
+        <Button variant="secondary" size="sm" className="mt-3" onClick={load}>Retry</Button>
       </Card>
     </div>
   )
@@ -91,10 +102,10 @@ export default function RenderDashboard({ integration }) {
   const s = data.stats
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto">
+    <div className="flex h-full flex-col overflow-hidden">
 
-      {/* header */}
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
+      {/* ── Header ────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between border-b border-border px-6 py-4 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-bg-inset">
             <Cloud size={18} className="text-accent" />
@@ -103,11 +114,11 @@ export default function RenderDashboard({ integration }) {
             <div className="text-sm font-semibold text-text">{integration.display_name}</div>
             <div className="text-[11px] text-text-faint">
               Render · Services & Deploys
-              {data._cache && (
-                <span>
-                  {' '}· {data._cache.hit
-                    ? `cached ${Math.round(data._cache.age_seconds / 60)}m ago`
-                    : 'just refreshed'}
+              {data?._cache && (
+                <span className="ml-1">
+                  · {data._cache.hit
+                      ? `cached ${Math.round(data._cache.age_seconds / 60)}m ago`
+                      : 'just refreshed'}
                 </span>
               )}
             </div>
@@ -115,32 +126,34 @@ export default function RenderDashboard({ integration }) {
         </div>
         <div className="flex gap-2">
           <Button variant="primary" size="sm" onClick={() => setShowNewService(true)}>
-            <Plus size={14} />
-            New service
+            <Plus size={14} /> New service
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => load({ refresh: true })} disabled={loading}>
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            Refresh
+          <Button
+            variant="secondary" size="sm"
+            onClick={() => load({ refresh: true })}
+            disabled={loading}
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
           </Button>
         </div>
       </div>
 
-      {/* stats row */}
-      <div className="flex flex-wrap gap-3 border-b border-border px-6 py-4">
-        <StatCard label="Total Services"    value={s.total_services}       tone="neutral" icon={Server} />
-        <StatCard label="Failed Deploys"    value={s.failed_deploy_count}  tone={s.failed_deploy_count ? 'danger'  : 'success'} icon={XCircle} />
-        <StatCard label="Suspended"         value={s.suspended_count}      tone={s.suspended_count     ? 'warning' : 'success'} icon={PauseCircle} />
-        <StatCard label="Recent Deploys"    value={s.recent_deploy_count}  tone="neutral" icon={Cloud} />
+      {/* ── Stats row ─────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-3 border-b border-border px-6 py-4 flex-shrink-0">
+        <StatCard label="Total Services"  value={s.total_services}      tone="neutral"                                         icon={Server}      />
+        <StatCard label="Failed Deploys"  value={s.failed_deploy_count} tone={s.failed_deploy_count ? 'danger'  : 'success'}   icon={XCircle}     />
+        <StatCard label="Suspended"       value={s.suspended_count}     tone={s.suspended_count     ? 'warning' : 'success'}   icon={PauseCircle} />
+        <StatCard label="Recent Deploys"  value={s.recent_deploy_count} tone="neutral"                                         icon={Cloud}       />
       </div>
 
-      {/* tabs */}
-      <div className="flex border-b border-border px-6">
+      {/* ── Tabs ──────────────────────────────────────────────────────── */}
+      <div className="flex border-b border-border px-6 flex-shrink-0">
         {TABS.map(t => {
           const count = t.statKey ? data.stats[t.statKey] : null
           return (
             <button
               key={t.key}
-              onClick={() => setTab(t.key)}
+              onClick={() => handleTabChange(t.key)}
               className={`flex items-center gap-1.5 border-b-2 px-4 py-3 text-xs font-medium transition-colors ${
                 tab === t.key
                   ? 'border-accent text-accent'
@@ -160,35 +173,51 @@ export default function RenderDashboard({ integration }) {
         })}
       </div>
 
-      {/* tab content */}
+      {/* ── Content ───────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {tab === 'services'
-          ? <ServiceList
+        {tab === 'services' ? (
+          <>
+            <ServiceList
               items={data.services}
               emptyMessage={EMPTY_MESSAGE.services}
               integrationId={integration.id}
               onChanged={() => load({ refresh: true })}
-              onViewLogs={(svc) => setLogsService(svc)}
+              onViewLogs={svc => setLogsService(svc)}
+              onSelect={handleSelectService}
+              selectedId={selectedService?.id}
             />
-          : <DeployList
-              items={data[tab]}
-              emptyMessage={EMPTY_MESSAGE[tab]}
-              integrationId={integration.id}
-              allowRollback={tab === 'failed_deploys' || tab === 'recent_deploys'}
-              allDeploys={data.recent_deploys}
-              onChanged={() => load({ refresh: true })}
-            />
-        }
+
+            {/* Metrics expand below the selected service card, full width */}
+            {selectedService && (
+              <div className="mt-3">
+                <ServiceMetricsPanel
+                  integrationId={integration.id}
+                  serviceId={selectedService.id}
+                  serviceName={selectedService.name}
+                  serviceType={selectedService.type}
+                  onClose={() => setSelectedService(null)}
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <DeployList
+            items={data[tab]}
+            emptyMessage={EMPTY_MESSAGE[tab]}
+            integrationId={integration.id}
+            allowRollback={tab === 'failed_deploys' || tab === 'recent_deploys'}
+            allDeploys={data.recent_deploys}
+            onChanged={() => load({ refresh: true })}
+          />
+        )}
       </div>
 
+      {/* ── Dialogs / overlays ────────────────────────────────────────── */}
       {showNewService && (
         <ServiceFormDialog
           integrationId={integration.id}
           onClose={() => setShowNewService(false)}
-          onSaved={() => {
-            setShowNewService(false)
-            load({ refresh: true })
-          }}
+          onSaved={() => { setShowNewService(false); load({ refresh: true }) }}
         />
       )}
 
@@ -200,7 +229,6 @@ export default function RenderDashboard({ integration }) {
           onClose={() => setLogsService(null)}
         />
       )}
-
     </div>
   )
 }

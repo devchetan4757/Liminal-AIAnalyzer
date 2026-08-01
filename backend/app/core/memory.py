@@ -35,7 +35,13 @@ def get_session(session_id: str) -> dict:
         _purge_expired()
         session = _store.get(session_id)
         if session is None:
-            session = {"turns": [], "last_analysis": None, "pending_sandbox_job": None, "last_seen": time.time()}
+            session = {
+                "turns": [],
+                "last_analysis": None,
+                "pending_sandbox_job": None,
+                "last_render_service": None,
+                "last_seen": time.time(),
+            }
             _store[session_id] = session
         else:
             session["last_seen"] = time.time()
@@ -67,6 +73,19 @@ def set_last_analysis(session_id: str, indicator_type: str, indicator: str, raw:
 
 def get_last_analysis(session_id: str):
     return get_session(session_id).get("last_analysis")
+
+
+def set_last_render_service(session_id: str, integration_id: str, service_id: str, service_name: str):
+    session = get_session(session_id)
+    session["last_render_service"] = {
+        "integration_id": integration_id,
+        "service_id": service_id,
+        "service_name": service_name,
+    }
+
+
+def get_last_render_service(session_id: str):
+    return get_session(session_id).get("last_render_service")
 
 
 def set_pending_sandbox_job(session_id: str, analysis_id: str, file_hash: str, filename: str):

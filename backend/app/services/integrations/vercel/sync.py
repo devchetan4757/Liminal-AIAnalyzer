@@ -12,7 +12,12 @@ IN_PROGRESS_STATES = {"QUEUED", "BUILDING", "INITIALIZING"}
 # /v9/projects/{id}/env. That endpoint returns plaintext environment
 # variable values and has no place in a security-monitoring integration -
 # same boundary RenderSyncService draws around Render's env-vars endpoint
-# and MongoDBSyncService draws around cluster documents.
+# and MongoDBSyncService draws around cluster documents. create_project()
+# below is a deliberate, narrow exception: it can *set* env vars the user
+# explicitly typed/pasted/uploaded at creation time (Vercel accepts these
+# inline on the create-project request body, same as Render's envVars -
+# unlike Netlify, which needs a second call). It still never reads
+# existing values back.
 
 
 class VercelSyncService:
@@ -141,6 +146,66 @@ class VercelSyncService:
                 f"Vercel request to delete deployment failed ({response.status_code}): {response.text[:200]}"
             )
         return {"id": service_id, "deleted": True}
+
+    def create_project(self, payload: dict):
+        """
+        Create a new Vercel project, optionally linked to a Git repo, via
+        a dedicated settings-form request (POST /v11/projects) - same
+        convention as RenderSyncService.create_service() and
+        NetlifySyncService.create_site(): a deliberate, user-initiated
+        create operation, not part of the passive sync/logs() path.
+
+        If the caller supplied any, environment variables are set inline
+        on this same request via Vercel's `environmentVariables` field -
+        Vercel is the one provider of the three that supports this
+        directly on project creation, no follow-up call needed. Each
+        variable is written as "encrypted" (Vercel's standard non-secret-
+        vault default, matching what the dashboard's own new-project form
+        uses) and applied to all three targets (production/preview/
+        development) so it's available everywhere by default; the user
+        can narrow that later in the Vercel dashboard if needed.
+        """
+        body = {"name": payload["name"]}
+
+        repo = payload.get("repo")
+        if repo:
+            body["gitRepository"] = {
+                "type": payload.get("repo_provider") or "github",
+                "repo": repo,
+            }
+
+        if payload.get("framework"):
+            body["framework"] = payload["framework"]
+        if payload.get("root_directory"):
+            body["rootDirectory"] = payload["root_directory"]
+        if payload.get("build_command"):
+            body["buildCommand"] = payload["build_command"]
+        if payload.get("install_command"):
+            body["installCommand"] = payload["install_command"]
+        if payload.get("output_directory"):
+            body["outputDirectory"] = payload["output_directory"]
+
+        env_vars = payload.get("env_vars") or []
+        if env_vars:
+            body["environmentVariables"] = [
+                {
+                    "key": e["key"],
+                    "value": e["value"],
+                    "type": "encrypted",
+                    "target": ["production", "preview", "development"],
+                }
+                for e in env_vars
+            ]
+
+        project = self._post("/v11/projects", json_body=body, ok_statuses=(200, 201))
+        latest = (project.get("latestDeployments") or [None])[0] or {}
+
+        return {
+            "id": project.get("id"),
+            "name": project.get("name"),
+            "framework": project.get("framework"),
+            "url": f"https://{latest.get('url')}" if latest.get("url") else None,
+        }
 
     # -------------------------------------------------------------
     # Read (passive sync path).

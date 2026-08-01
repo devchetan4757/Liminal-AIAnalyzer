@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from app.core import llm, memory
 from app.core.aggregator import aggregate, quick_score
 from app.core.context import build_integration_context
+from app.core.live_sync import refresh_stale_integrations
+from app.core.log_lookup import maybe_fetch_service_logs
 from app.core.indicator import detect_indicator
 from app.core.deps import get_current_user
 from app.core.ownership import get_owned_conversation
@@ -52,11 +54,13 @@ async def handle_message(
     indicator_type, indicator = detect_indicator(msg.text)
 
     if not indicator_type:
+        await refresh_stale_integrations(current_user.id, db)
         integration_context = build_integration_context(current_user.id, db)
+        log_context = maybe_fetch_service_logs(msg.text, current_user.id, db, session_id=session_id)
         reply = llm.answer_question(
             msg.text,
             session_id=session_id,
-            extra_system=integration_context,
+            extra_system=[integration_context, log_context],
         )
         crud.append_message(db, conversation, role="assistant", content=reply)
 

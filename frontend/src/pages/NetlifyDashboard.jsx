@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw, Globe, XCircle, Lock, Rocket } from 'lucide-react'
+import { RefreshCw, Globe, XCircle, Lock, Rocket, Plus } from 'lucide-react'
 import { getNetlifyStatus } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { DeployList, SiteList } from '../components/netlify/DeployTabs'
+import { SiteFormDialog } from '../components/netlify/SiteFormDialog'
 
 const TABS = [
   { key: 'sites',           label: 'Sites',           statKey: 'total_sites' },
@@ -41,6 +42,7 @@ export default function NetlifyDashboard({ integration }) {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState('')
   const [tab, setTab]         = useState('sites')
+  const [showNewSite, setShowNewSite] = useState(false)
 
   const load = async (opts) => {
     setLoading(true)
@@ -109,10 +111,15 @@ export default function NetlifyDashboard({ integration }) {
             </div>
           </div>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => load({ refresh: true })} disabled={loading}>
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="primary" size="sm" onClick={() => setShowNewSite(true)}>
+            <Plus size={14} /> New site
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => load({ refresh: true })} disabled={loading}>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* stats row */}
@@ -169,6 +176,14 @@ export default function NetlifyDashboard({ integration }) {
             />
         }
       </div>
+
+      {showNewSite && (
+        <SiteFormDialog
+          integrationId={integration.id}
+          onClose={() => setShowNewSite(false)}
+          onSaved={() => { setShowNewSite(false); load({ refresh: true }) }}
+        />
+      )}
 
     </div>
   )

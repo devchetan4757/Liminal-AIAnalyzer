@@ -1,9 +1,9 @@
 import asyncio
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -11,6 +11,7 @@ from app.db.models import User
 from app.core.encryption import decrypt
 from app.core.deps import get_current_user
 from app.core.ownership import get_owned_integration
+from app.core.env_vars import EnvVarItem, validate_env_var_list
 from app.services.integrations.netlify.sync import NetlifySyncService
 
 router = APIRouter(
@@ -39,6 +40,13 @@ class CreateSiteRequest(BaseModel):
     build_command: Optional[str] = None
     publish_dir: Optional[str] = None
     account_slug: Optional[str] = None
+    account_id: Optional[str] = None
+    env_vars: Optional[List[EnvVarItem]] = None
+
+    @field_validator("env_vars")
+    @classmethod
+    def validate_env_vars(cls, v: Optional[List[EnvVarItem]]) -> Optional[List[EnvVarItem]]:
+        return validate_env_var_list(v)
 
 
 def _service_for(integration) -> NetlifySyncService:

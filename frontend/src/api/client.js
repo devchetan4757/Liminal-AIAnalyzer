@@ -78,7 +78,7 @@ export async function sendMessage(text, conversationId) {
     const { data } = await api.post('/chat/message', {
       text,
       conversation_id: conversationId,
-    })
+    }, { timeout: 0 })
     return data
   } catch (err) {
     throw new Error(extractErrorMessage(err))
@@ -330,6 +330,22 @@ export async function getRenderServiceLogs(integrationId, serviceId, { limit = 1
   }
 }
 
+// Real response-time / uptime history for a service, built from live HTTP
+// checks against its own public URL - works on every Render plan,
+// including Free tier (see backend routers/render.py + services/
+// integrations/render/uptime.py for why this replaced the old
+// CPU%/memory metrics() call).
+export async function getRenderServicePerformance(integrationId, serviceId, { hours = 3 } = {}) {
+  try {
+    const { data } = await api.get(
+      `/integrations/${integrationId}/render/services/${serviceId}/performance`,
+      { params: { hours }, timeout: 20000 },
+    )
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
 // Settings-form operations (create) - separate from the one-click
 // redeploy/rollback/cancel/suspend/resume/restart/scale actions, which
 // go through triggerRemoteAction below.
@@ -372,6 +388,30 @@ export async function getNetlifyStatus(integrationId, { refresh = false } = {}) 
   }
 }
 
+export async function getNetlifyAccounts(integrationId) {
+  try {
+    const { data } = await api.get(`/integrations/${integrationId}/netlify/accounts`, {
+      timeout: 20000,
+    })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+export async function createNetlifySite(integrationId, payload) {
+  try {
+    const { data } = await api.post(
+      `/integrations/${integrationId}/netlify/sites`,
+      payload,
+      { timeout: 45000 },
+    )
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
 // --- Vercel ---------------------------------------------------------------
 
 export async function getVercelStatus(integrationId, { refresh = false } = {}) {
@@ -380,6 +420,24 @@ export async function getVercelStatus(integrationId, { refresh = false } = {}) {
       params: { refresh },
       timeout: 50000,
     })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// Settings-form operation (create) - separate from the one-click
+// redeploy/cancel_deployment/promote/delete_deployment actions, which
+// go through triggerRemoteAction. No team-picker call needed here (unlike
+// Netlify's getNetlifyAccounts) since a Vercel integration is already
+// scoped to a single team/personal account at connect time.
+export async function createVercelProject(integrationId, payload) {
+  try {
+    const { data } = await api.post(
+      `/integrations/${integrationId}/vercel/projects`,
+      payload,
+      { timeout: 45000 },
+    )
     return data
   } catch (err) {
     throw new Error(extractErrorMessage(err))
