@@ -1,6 +1,7 @@
-import { ExternalLink, CheckCircle2, XCircle, Triangle, GitCommit, RotateCw, Ban, ArrowUpCircle, Trash2 } from 'lucide-react'
+import { ExternalLink, CheckCircle2, XCircle, Triangle, GitCommit, RotateCw, Ban, ArrowUpCircle, Trash2, ScrollText } from 'lucide-react'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
+import { Button } from '../ui/Button'
 import { AddToWatchlistButton } from '../watchlist/AddToWatchlistButton'
 import { RemoteActionButton } from '../actions/RemoteActionButton'
 
@@ -144,19 +145,39 @@ export function DeploymentList({ items, emptyMessage, integrationId, onChanged }
   )
 }
 
-export function ProjectList({ items, emptyMessage }) {
+/**
+ * selectedId  — id of the currently selected project
+ * onSelect    — called with project object on card click
+ * onViewLogs  — called with project object on Logs button click
+ *
+ * When selectedId is set only that card is rendered; all others are
+ * hidden. Clicking the same card again (toggle) is handled by the
+ * parent. Mirrors render/DeployTabs.jsx's ServiceList.
+ */
+export function ProjectList({ items, emptyMessage, integrationId, onViewLogs, onSelect, selectedId }) {
   if (!items?.length) return <EmptyState message={emptyMessage} />
+
+  const visible = selectedId ? items.filter(p => p.id === selectedId) : items
 
   return (
     <div className="flex flex-col gap-2">
-      {items.map((project) => {
+      {visible.map((project) => {
         const tone = STATUS_TONE[project.latest_deployment_state] || 'neutral'
+        const isSelected = project.id === selectedId
+        const hasDeployment = Boolean(project.latest_deployment_id)
+
         return (
-          <Card key={project.id}>
+          <Card
+            key={project.id}
+            onClick={() => hasDeployment && onSelect?.(project)}
+            className={`transition-colors ${hasDeployment ? 'cursor-pointer' : ''} ${
+              isSelected ? 'border-accent/60 bg-accent-soft/10' : 'hover:border-border/80'
+            }`}
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                  <Badge tone={tone}>
+                  <Badge tone={isSelected ? 'accent' : tone}>
                     <Triangle size={10} />
                     {project.latest_deployment_state || 'no deploys'}
                   </Badge>
@@ -166,17 +187,26 @@ export function ProjectList({ items, emptyMessage }) {
                   )}
                 </div>
               </div>
-              {project.url && (
-                <a
-                  href={project.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="shrink-0 text-text-faint hover:text-accent transition-colors"
-                  title="Open project"
-                >
-                  <ExternalLink size={15} />
-                </a>
-              )}
+
+              {/* stop propagation so action buttons don't trigger card selection */}
+              <div className="flex shrink-0 items-center gap-2" onClick={e => e.stopPropagation()}>
+                {onViewLogs && hasDeployment && (
+                  <Button variant="secondary" size="sm" onClick={() => onViewLogs(project)}>
+                    <ScrollText size={13} /> Logs
+                  </Button>
+                )}
+                {project.url && (
+                  <a
+                    href={project.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 text-text-faint hover:text-accent transition-colors"
+                    title="Open project"
+                  >
+                    <ExternalLink size={15} />
+                  </a>
+                )}
+              </div>
             </div>
           </Card>
         )

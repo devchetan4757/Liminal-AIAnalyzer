@@ -5,6 +5,8 @@ import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { DeployList, SiteList } from '../components/netlify/DeployTabs'
 import { SiteFormDialog } from '../components/netlify/SiteFormDialog'
+import { SiteLogsPanel } from '../components/netlify/SiteLogsPanel'
+import { SiteMetricsPanel } from '../components/netlify/SiteMetricsPanel'
 
 const TABS = [
   { key: 'sites',           label: 'Sites',           statKey: 'total_sites' },
@@ -43,6 +45,8 @@ export default function NetlifyDashboard({ integration }) {
   const [error, setError]     = useState('')
   const [tab, setTab]         = useState('sites')
   const [showNewSite, setShowNewSite] = useState(false)
+  const [logsSite, setLogsSite]         = useState(null)
+  const [selectedSite, setSelectedSite] = useState(null)
 
   const load = async (opts) => {
     setLoading(true)
@@ -58,6 +62,16 @@ export default function NetlifyDashboard({ integration }) {
   }
 
   useEffect(() => { load() }, [integration.id])
+
+  const handleTabChange = (key) => {
+    setTab(key)
+    if (key !== 'sites') setSelectedSite(null)
+  }
+
+  const handleSelectSite = (site) => {
+    // toggle: clicking the already-selected card collapses metrics
+    setSelectedSite(prev => prev?.id === site.id ? null : site)
+  }
 
   if (loading) return (
     <div className="flex h-full flex-col gap-4 p-6">
@@ -137,7 +151,7 @@ export default function NetlifyDashboard({ integration }) {
           return (
             <button
               key={t.key}
-              onClick={() => setTab(t.key)}
+              onClick={() => handleTabChange(t.key)}
               className={`flex items-center gap-1.5 border-b-2 px-4 py-3 text-xs font-medium transition-colors ${
                 tab === t.key
                   ? 'border-accent text-accent'
@@ -160,12 +174,29 @@ export default function NetlifyDashboard({ integration }) {
       {/* tab content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {tab === 'sites'
-          ? <SiteList
-              items={data.sites}
-              emptyMessage={EMPTY_MESSAGE.sites}
-              integrationId={integration.id}
-              onChanged={() => load({ refresh: true })}
-            />
+          ? <>
+              <SiteList
+                items={data.sites}
+                emptyMessage={EMPTY_MESSAGE.sites}
+                integrationId={integration.id}
+                onChanged={() => load({ refresh: true })}
+                onViewLogs={site => setLogsSite(site)}
+                onSelect={handleSelectSite}
+                selectedId={selectedSite?.id}
+              />
+
+              {/* Metrics expand below the selected site card, full width */}
+              {selectedSite && (
+                <div className="mt-3">
+                  <SiteMetricsPanel
+                    integrationId={integration.id}
+                    siteId={selectedSite.id}
+                    siteName={selectedSite.name}
+                    onClose={() => setSelectedSite(null)}
+                  />
+                </div>
+              )}
+            </>
           : <DeployList
               items={data[tab]}
               emptyMessage={EMPTY_MESSAGE[tab]}
@@ -182,6 +213,15 @@ export default function NetlifyDashboard({ integration }) {
           integrationId={integration.id}
           onClose={() => setShowNewSite(false)}
           onSaved={() => { setShowNewSite(false); load({ refresh: true }) }}
+        />
+      )}
+
+      {logsSite && (
+        <SiteLogsPanel
+          integrationId={integration.id}
+          siteId={logsSite.id}
+          siteName={logsSite.name}
+          onClose={() => setLogsSite(null)}
         />
       )}
 

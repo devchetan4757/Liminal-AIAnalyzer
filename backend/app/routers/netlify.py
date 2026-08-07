@@ -2,17 +2,25 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.db.models import User
+from app.db.crud import record_uptime_check, get_uptime_checks
 from app.core.encryption import decrypt
 from app.core.deps import get_current_user
 from app.core.ownership import get_owned_integration
 from app.core.env_vars import EnvVarItem, validate_env_var_list
 from app.services.integrations.netlify.sync import NetlifySyncService
+
+# Reused as-is: a generic "GET a URL, time it" helper with no
+# Netlify-specific logic (see its own module docstring), and the crud
+# functions above already persist against the provider-agnostic
+# ServiceUptimeCheck table. Same reuse Render and Vercel's routers make
+# (see routers/render.py, routers/vercel.py) instead of forking it.
+from app.services.integrations.render.uptime import check_url, summarize
 
 router = APIRouter(
     prefix="/api/integrations",
@@ -103,6 +111,109 @@ async def netlify_status(
         **data,
         "_cache": {"hit": False, "cached_at": now.isoformat(), "age_seconds": 0},
     }
+
+
+@router.get("/{integration_id}/netlify/sites/{site_id}/performance")
+async def netlify_site_performance(
+    integration_id: str,
+    site_id: str,
+    hours: int = Query(3, ge=1, le=168),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Real response-time / uptime history for a single site. Same approach
+    as render_service_performance / vercel_project_performance: Netlify
+    has no "current CPU/memory" metrics API for a site either, so this
+    looks up the site's own public URL and makes a genuine HTTP request
+    straight to it, timing the response, then persists that check
+    alongside the site's past checks.
+    """
+    integration = get_owned_integration(db, integration_id, current_user.id, provider="netlify")
+    service = _service_for(integration)
+
+    try:
+        site_url = await asyncio.wait_for(
+            asyncio.get_event_loop().run_in_executor(None, lambda: service.get_site_url(site_id)),
+            timeout=20.0,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Timed out looking up the site's URL.")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not look up the site's URL: {exc}")
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.get_event_loop().run_in_executor(None, lambda: check_url(site_url)),
+            timeout=15.0,
+        )
+    except asyncio.TimeoutError:
+        result = {
+            "is_up": False,
+            "status_code": None,
+            "response_time_ms": None,
+            "error": "Live check timed out after 15s.",
+        }
+
+    record_uptime_check(
+        db,
+        integration_id=integration_id,
+        service_id=site_id,
+        is_up=result["is_up"],
+        status_code=result["status_code"],
+        response_time_ms=result["response_time_ms"],
+        error=result["error"],
+    )
+
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    checks = get_uptime_checks(db, integration_id, site_id, since)
+
+    points = [
+        {
+            "timestamp": (
+                c.checked_at if c.checked_at.tzinfo else c.checked_at.replace(tzinfo=timezone.utc)
+            ).isoformat(),
+            "response_time_ms": c.response_time_ms,
+            "is_up": c.is_up,
+            "status_code": c.status_code,
+        }
+        for c in checks
+    ]
+
+    return {
+        "site_id": site_id,
+        "site_url": site_url,
+        "last_error": checks[-1].error if checks and not checks[-1].is_up else None,
+        **summarize(checks),
+        "points": points,
+    }
+
+
+@router.get("/{integration_id}/netlify/sites/{site_id}/logs")
+async def netlify_site_logs(
+    integration_id: str,
+    site_id: str,
+    limit: int = 100,
+    type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    integration = get_owned_integration(db, integration_id, current_user.id, provider="netlify")
+    service = _service_for(integration)
+
+    try:
+        data = await asyncio.wait_for(
+            asyncio.get_event_loop().run_in_executor(
+                None, lambda: service.site_logs(site_id, limit=limit, log_type=type)
+            ),
+            timeout=30.0,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Netlify log fetch timed out.")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Netlify log fetch failed: {exc}")
+
+    return data
 
 
 @router.get("/{integration_id}/netlify/accounts")

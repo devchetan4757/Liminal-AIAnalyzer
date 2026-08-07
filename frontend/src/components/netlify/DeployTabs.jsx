@@ -1,6 +1,7 @@
-import { ExternalLink, CheckCircle2, XCircle, Lock, Globe, GitCommit, RotateCw } from 'lucide-react'
+import { ExternalLink, CheckCircle2, XCircle, Lock, Globe, GitCommit, RotateCw, Ban, ScrollText } from 'lucide-react'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
+import { Button } from '../ui/Button'
 import { AddToWatchlistButton } from '../watchlist/AddToWatchlistButton'
 import { RemoteActionButton } from '../actions/RemoteActionButton'
 
@@ -18,6 +19,15 @@ const STATE_TONE = {
   preparing: 'accent',
   deploying: 'accent',
 }
+
+// Deploy states that are still running - cancel only makes sense while
+// one of these. Mirrors NetlifySyncService.IN_PROGRESS_STATES
+// (services/integrations/netlify/sync.py) and render/DeployTabs.jsx's
+// IN_PROGRESS_STATUSES.
+const IN_PROGRESS_STATES = new Set([
+  'new', 'enqueued', 'building', 'uploading', 'uploaded',
+  'processing', 'processed', 'preparing', 'deploying',
+])
 
 function timeAgo(iso) {
   if (!iso) return '—'
@@ -55,6 +65,7 @@ export function DeployList({ items, emptyMessage, integrationId, allowRollback, 
       {items.map((item) => {
         const tone = STATE_TONE[item.state] || 'neutral'
         const rollbackTarget = allowRollback && integrationId ? findRollbackTarget(item, allDeploys) : null
+        const cancellable = integrationId && IN_PROGRESS_STATES.has(item.state)
 
         return (
           <Card key={item.id} className={tone === 'danger' ? 'border-danger/40 bg-danger-soft/20' : undefined}>
@@ -82,6 +93,18 @@ export function DeployList({ items, emptyMessage, integrationId, allowRollback, 
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {cancellable && (
+                  <RemoteActionButton
+                    integrationId={integrationId}
+                    provider="netlify"
+                    action="cancel"
+                    resourceId={item.site_id}
+                    resourceName={item.site_name}
+                    extra={{ deploy_id: item.id }}
+                    icon={Ban}
+                    onDone={onChanged}
+                  />
+                )}
                 {rollbackTarget && (
                   <RemoteActionButton
                     integrationId={integrationId}
@@ -125,21 +148,43 @@ export function DeployList({ items, emptyMessage, integrationId, allowRollback, 
   )
 }
 
-export function SiteList({ items, emptyMessage, integrationId, onChanged }) {
+/**
+ * selectedId  — id of the currently selected site
+ * onSelect    — called with site object on card click
+ * onViewLogs  — called with site object on Logs button click
+ *
+ * When selectedId is set only that card is rendered; all others are hidden.
+ * Clicking the same card again (toggle) is handled by the parent. Mirrors
+ * render/DeployTabs.jsx's ServiceList and vercel/DeployTabs.jsx's ProjectList.
+ */
+export function SiteList({ items, emptyMessage, integrationId, onChanged, onViewLogs, onSelect, selectedId }) {
   if (!items?.length) return <EmptyState message={emptyMessage} />
+
+  const visible = selectedId ? items.filter(s => s.id === selectedId) : items
 
   return (
     <div className="flex flex-col gap-2">
-      {items.map((site) => {
+      {visible.map((site) => {
         const locked = !!site.locked
+        const isSelected = site.id === selectedId
         return (
-          <Card key={site.id} className={locked ? 'border-warning/40 bg-warning-soft/20' : undefined}>
+          <Card
+            key={site.id}
+            onClick={() => onSelect?.(site)}
+            className={`cursor-pointer transition-colors ${
+              isSelected
+                ? 'border-accent/60 bg-accent-soft/10'
+                : locked
+                  ? 'border-warning/40 bg-warning-soft/20 hover:border-warning/60'
+                  : 'hover:border-border/80'
+            }`}
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
                   {locked
                     ? <Badge tone="warning"><Lock size={11} /> locked</Badge>
-                    : <Badge tone="success"><Globe size={11} /> active</Badge>}
+                    : <Badge tone={isSelected ? 'accent' : 'success'}><Globe size={11} /> active</Badge>}
                   <span className="text-sm font-medium text-text truncate">{site.name}</span>
                 </div>
                 {site.repo && (
@@ -148,7 +193,14 @@ export function SiteList({ items, emptyMessage, integrationId, onChanged }) {
                   </p>
                 )}
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+
+              {/* stop propagation so action buttons don't trigger card selection */}
+              <div className="flex shrink-0 items-center gap-2" onClick={e => e.stopPropagation()}>
+                {onViewLogs && (
+                  <Button variant="secondary" size="sm" onClick={() => onViewLogs(site)}>
+                    <ScrollText size={13} /> Logs
+                  </Button>
+                )}
                 {integrationId && !locked && (
                   <RemoteActionButton
                     integrationId={integrationId}

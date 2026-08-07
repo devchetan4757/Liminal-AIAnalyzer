@@ -5,6 +5,8 @@ import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { DeploymentList, ProjectList } from '../components/vercel/DeployTabs'
 import { ProjectFormDialog } from '../components/vercel/ProjectFormDialog'
+import { DeploymentLogsPanel } from '../components/vercel/DeploymentLogsPanel'
+import { ProjectMetricsPanel } from '../components/vercel/ProjectMetricsPanel'
 
 const TABS = [
   { key: 'projects',           label: 'Projects',           statKey: 'total_projects' },
@@ -41,6 +43,8 @@ export default function VercelDashboard({ integration }) {
   const [error, setError]     = useState('')
   const [tab, setTab]         = useState('projects')
   const [showNewProject, setShowNewProject] = useState(false)
+  const [logsProject, setLogsProject]       = useState(null)
+  const [selectedProject, setSelectedProject] = useState(null)
 
   const load = async (opts) => {
     setLoading(true)
@@ -56,6 +60,16 @@ export default function VercelDashboard({ integration }) {
   }
 
   useEffect(() => { load() }, [integration.id])
+
+  const handleTabChange = (key) => {
+    setTab(key)
+    if (key !== 'projects') setSelectedProject(null)
+  }
+
+  const handleSelectProject = (project) => {
+    // toggle: clicking the already-selected card collapses metrics
+    setSelectedProject(prev => prev?.id === project.id ? null : project)
+  }
 
   if (loading) return (
     <div className="flex h-full flex-col gap-4 p-6">
@@ -134,7 +148,7 @@ export default function VercelDashboard({ integration }) {
           return (
             <button
               key={t.key}
-              onClick={() => setTab(t.key)}
+              onClick={() => handleTabChange(t.key)}
               className={`flex items-center gap-1.5 border-b-2 px-4 py-3 text-xs font-medium transition-colors ${
                 tab === t.key
                   ? 'border-accent text-accent'
@@ -156,18 +170,38 @@ export default function VercelDashboard({ integration }) {
 
       {/* tab content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {tab === 'projects'
-          ? <ProjectList
+        {tab === 'projects' ? (
+          <>
+            <ProjectList
               items={data.projects}
               emptyMessage={EMPTY_MESSAGE.projects}
-            />
-          : <DeploymentList
-              items={data[tab]}
-              emptyMessage={EMPTY_MESSAGE[tab]}
               integrationId={integration.id}
-              onChanged={() => load({ refresh: true })}
+              onViewLogs={project => setLogsProject(project)}
+              onSelect={handleSelectProject}
+              selectedId={selectedProject?.id}
             />
-        }
+
+            {/* Metrics expand below the selected project card, full width */}
+            {selectedProject && (
+              <div className="mt-3">
+                <ProjectMetricsPanel
+                  integrationId={integration.id}
+                  projectId={selectedProject.id}
+                  projectName={selectedProject.name}
+                  framework={selectedProject.framework}
+                  onClose={() => setSelectedProject(null)}
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <DeploymentList
+            items={data[tab]}
+            emptyMessage={EMPTY_MESSAGE[tab]}
+            integrationId={integration.id}
+            onChanged={() => load({ refresh: true })}
+          />
+        )}
       </div>
 
       {showNewProject && (
@@ -175,6 +209,15 @@ export default function VercelDashboard({ integration }) {
           integrationId={integration.id}
           onClose={() => setShowNewProject(false)}
           onSaved={() => { setShowNewProject(false); load({ refresh: true }) }}
+        />
+      )}
+
+      {logsProject && (
+        <DeploymentLogsPanel
+          integrationId={integration.id}
+          deploymentId={logsProject.latest_deployment_id}
+          projectName={logsProject.name}
+          onClose={() => setLogsProject(null)}
         />
       )}
 

@@ -115,6 +115,82 @@ class NetlifySyncService:
 
         return results
 
+    # -------------------------------------------------------------
+    # Site performance — mirrors RenderSyncService.get_service_url() /
+    # VercelSyncService.get_project_url(). Netlify has no "current CPU/
+    # memory" metrics API for a site either, so the performance panel
+    # instead makes a genuine HTTP request straight to the site's own
+    # public URL and times it (see services/integrations/render/uptime.py,
+    # reused here as a provider-agnostic helper).
+    # -------------------------------------------------------------
+
+    def get_site_url(self, site_id: str) -> str | None:
+        """Fetch a single site's public URL, or None if it somehow has
+        none (shouldn't normally happen for a Netlify site)."""
+        site = self._get(f"/sites/{site_id}")
+        return site.get("ssl_url") or site.get("url")
+
+    # -------------------------------------------------------------
+    # Site logs — build-log output for a site's most recent deploy.
+    # Netlify's REST API has no queryable runtime-log endpoint (unlike
+    # Render's /logs); what it does expose per-deploy is a `summary`
+    # object with an ordered list of build-step messages (init / build /
+    # deploy / etc, each with its own status). This flattens that into
+    # the same {id, timestamp, message, level, type} shape
+    # RenderSyncService.service_logs() and VercelSyncService.
+    # deployment_logs() return, so the frontend panel can be identical.
+    # Defaults to the latest deploy; pass deploy_id to look at an older one.
+    # -------------------------------------------------------------
+
+    def site_logs(self, site_id: str, limit: int = 100, deploy_id: str = None, log_type: str = None):
+        if not deploy_id:
+            recent = self.deploys(site_id, limit=1)
+            if not recent:
+                return {"site_id": site_id, "deploy_id": None, "logs": [], "has_more": False}
+            deploy_id = recent[0]["id"]
+
+        deploy = self._get(f"/deploys/{deploy_id}")
+
+        summary = deploy.get("summary") or {}
+        messages = summary.get("messages") or []
+
+        results = []
+        for i, msg in enumerate(messages):
+            level = "error" if msg.get("type") in ("error", "failing") else None
+            entry_type = msg.get("type") or msg.get("section")
+            if log_type and entry_type != log_type:
+                continue
+            text = msg.get("description") or msg.get("title") or ""
+            if not text:
+                continue
+            results.append({
+                "id": f"{deploy_id}-{i}",
+                "timestamp": deploy.get("created_at"),
+                "message": f"{msg.get('title')}: {msg.get('description')}" if msg.get("title") and msg.get("description") else text,
+                "level": level,
+                "type": entry_type,
+            })
+
+        # A deploy that failed outright (before any build-step summary
+        # was recorded) still has a top-level error_message - surface
+        # that too rather than showing an empty panel.
+        if deploy.get("error_message") and not any(r["level"] == "error" for r in results):
+            results.append({
+                "id": f"{deploy_id}-error",
+                "timestamp": deploy.get("updated_at") or deploy.get("created_at"),
+                "message": deploy["error_message"],
+                "level": "error",
+                "type": "error",
+            })
+
+        return {
+            "site_id": site_id,
+            "deploy_id": deploy_id,
+            "deploy_state": deploy.get("state"),
+            "logs": results[:limit],
+            "has_more": False,
+        }
+
     def logs(self):
         """
         Build the same "stats + buckets" shape RenderSyncService.logs()
@@ -189,8 +265,17 @@ class NetlifySyncService:
             "rolled_back_to": deploy_id,
         }
 
-    def cancel_deploy(self, deploy_id: str):
-        """Cancel a deploy that's currently building/uploading/processing."""
+    def cancel_deploy(self, site_id: str, deploy_id: str):
+        """
+        Cancel a deploy that's currently building/uploading/processing.
+
+        Netlify's cancel endpoint is scoped by deploy_id alone (there's no
+        site-scoped variant), but the generic remote-actions router always
+        passes this provider's resource kwarg (site_id) plus whatever
+        `extra` the action requires (deploy_id here - see the ("netlify",
+        "cancel") entry in app/services/remote_actions/registry.py). site_id
+        is accepted so that call shape works, and simply isn't used.
+        """
         self._post(f"/deploys/{deploy_id}/cancel")
         return {"id": deploy_id, "status": "canceled"}
 

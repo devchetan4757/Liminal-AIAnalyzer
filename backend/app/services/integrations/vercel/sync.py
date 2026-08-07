@@ -208,6 +208,66 @@ class VercelSyncService:
         }
 
     # -------------------------------------------------------------
+    # Project performance — same pattern as RenderSyncService's
+    # get_service_url() (see app/services/integrations/render/sync.py).
+    # Vercel has no "current CPU/memory" metrics endpoint for a project
+    # either, and deployment ids are ephemeral (a new one every deploy),
+    # so this resolves the *project's* latest-deployment URL fresh on
+    # every call. The router persists a live HTTP check against that URL
+    # keyed by project_id (the stable resource), via the same generic
+    # crud.record_uptime_check()/ServiceUptimeCheck table Render uses -
+    # no migration needed since that table is provider-agnostic.
+    # -------------------------------------------------------------
+
+    def get_project_url(self, project_id: str) -> str | None:
+        """Fetch a single project's latest-deployment URL, or None if it
+        has never been deployed."""
+        project = self._get(f"/v9/projects/{project_id}")
+        latest = (project.get("latestDeployments") or [None])[0] or {}
+        url = latest.get("url")
+        return f"https://{url}" if url else None
+
+    # -------------------------------------------------------------
+    # Deployment logs — build logs for a single deployment. Vercel's
+    # runtime-logs API is a live stream rather than a queryable JSON
+    # endpoint, so (mirroring RenderSyncService.service_logs(), which
+    # also only surfaces what Render's /logs endpoint exposes) this
+    # covers build output: command/stdout/stderr/fatal events from the
+    # deployment's build. `deployment_id` is a `dpl_...` id, e.g. from
+    # projects()[i]["latest_deployment_id"] or a deployments() entry.
+    # -------------------------------------------------------------
+
+    def deployment_logs(self, deployment_id: str, limit: int = 100, log_type: str = None):
+        params = {"limit": limit, "direction": "backward"}
+        if log_type:
+            params["types"] = log_type
+
+        data = self._get(f"/v3/deployments/{deployment_id}/events", params=params)
+        entries = data if isinstance(data, list) else (data.get("events") or [])
+
+        results = []
+        for entry in entries:
+            payload = entry.get("payload") or {}
+            text = payload.get("text")
+            if text is None:
+                # Non-text events (e.g. "delimiter" step markers) carry
+                # no log line - skip rather than showing a blank row.
+                continue
+            results.append({
+                "id": payload.get("id") or f"{entry.get('created')}-{len(results)}",
+                "timestamp": entry.get("created"),
+                "message": text,
+                "level": "error" if entry.get("type") == "fatal" else None,
+                "type": entry.get("type"),
+            })
+
+        return {
+            "deployment_id": deployment_id,
+            "logs": results,
+            "has_more": len(results) >= limit,
+        }
+
+    # -------------------------------------------------------------
     # Read (passive sync path).
     # -------------------------------------------------------------
 

@@ -399,6 +399,39 @@ export async function getNetlifyAccounts(integrationId) {
   }
 }
 
+// On-demand build-log lines for a site's most recent deploy - fetched
+// only when the user opens that site's log panel, separate from the
+// cached status/summary poll above. Mirrors getRenderServiceLogs /
+// getVercelDeploymentLogs.
+export async function getNetlifySiteLogs(integrationId, siteId, { limit = 100, type } = {}) {
+  try {
+    const { data } = await api.get(
+      `/integrations/${integrationId}/netlify/sites/${siteId}/logs`,
+      { params: { limit, type }, timeout: 35000 },
+    )
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// Real response-time / uptime history for a site, built from live HTTP
+// checks against its own public URL - works regardless of plan. Mirrors
+// getRenderServicePerformance / getVercelProjectPerformance (see backend
+// routers/netlify.py + services/integrations/render/uptime.py, reused as
+// a provider-agnostic helper).
+export async function getNetlifySitePerformance(integrationId, siteId, { hours = 3 } = {}) {
+  try {
+    const { data } = await api.get(
+      `/integrations/${integrationId}/netlify/sites/${siteId}/performance`,
+      { params: { hours }, timeout: 20000 },
+    )
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
 export async function createNetlifySite(integrationId, payload) {
   try {
     const { data } = await api.post(
@@ -420,6 +453,38 @@ export async function getVercelStatus(integrationId, { refresh = false } = {}) {
       params: { refresh },
       timeout: 50000,
     })
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// On-demand build-log lines for a single deployment - fetched only when
+// the user opens that deployment's log panel, separate from the cached
+// status/summary poll above. Mirrors getRenderServiceLogs.
+export async function getVercelDeploymentLogs(integrationId, deploymentId, { limit = 100, type } = {}) {
+  try {
+    const { data } = await api.get(
+      `/integrations/${integrationId}/vercel/deployments/${deploymentId}/logs`,
+      { params: { limit, type }, timeout: 35000 },
+    )
+    return data
+  } catch (err) {
+    throw new Error(extractErrorMessage(err))
+  }
+}
+
+// Real response-time / uptime history for a project, built from live HTTP
+// checks against its latest deployment's URL - works the same regardless
+// of plan. Mirrors getRenderServicePerformance (see backend routers/
+// vercel.py + services/integrations/render/uptime.py, reused as a
+// provider-agnostic helper).
+export async function getVercelProjectPerformance(integrationId, projectId, { hours = 3 } = {}) {
+  try {
+    const { data } = await api.get(
+      `/integrations/${integrationId}/vercel/projects/${projectId}/performance`,
+      { params: { hours }, timeout: 20000 },
+    )
     return data
   } catch (err) {
     throw new Error(extractErrorMessage(err))
