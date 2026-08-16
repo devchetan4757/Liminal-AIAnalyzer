@@ -38,6 +38,7 @@ class NetlifyProvider(IntegrationProvider):
         "cancel": "cancel_deploy",
         "suspend": "lock_site",
         "resume": "unlock_site",
+        "delete": "delete_site",
     }
 
     async def execute_action(self, action: str, **kwargs):

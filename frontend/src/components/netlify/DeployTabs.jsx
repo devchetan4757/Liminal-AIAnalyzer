@@ -1,4 +1,4 @@
-import { ExternalLink, CheckCircle2, XCircle, Lock, Globe, GitCommit, RotateCw, Ban, ScrollText } from 'lucide-react'
+import { ExternalLink, CheckCircle2, XCircle, Lock, Unlock, Globe, GitCommit, RotateCw, Ban, ScrollText, Trash2 } from 'lucide-react'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -220,7 +220,19 @@ export function SiteList({ items, emptyMessage, integrationId, onChanged, onView
                     resourceId={site.id}
                     resourceName={site.name}
                     variant={locked ? 'secondary' : 'danger'}
-                    icon={Lock}
+                    icon={locked ? Unlock : Lock}
+                    onDone={onChanged}
+                  />
+                )}
+                {integrationId && (
+                  <RemoteActionButton
+                    integrationId={integrationId}
+                    provider="netlify"
+                    action="delete"
+                    resourceId={site.id}
+                    resourceName={site.name}
+                    variant="danger"
+                    icon={Trash2}
                     onDone={onChanged}
                   />
                 )}

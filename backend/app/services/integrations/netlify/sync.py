@@ -87,7 +87,7 @@ class NetlifySyncService:
                 "admin_url": site.get("admin_url"),
                 "repo": (site.get("build_settings") or {}).get("repo_path"),
                 "branch": (site.get("build_settings") or {}).get("repo_branch"),
-                "locked": bool(site.get("published_deploy", {}).get("locked")) or bool(site.get("build_settings", {}).get("stop_builds")),
+                "locked": bool((site.get("published_deploy") or {}).get("locked")) or bool((site.get("build_settings") or {}).get("stop_builds")),
                 "published_deploy_state": published.get("state"),
                 "created_at": site.get("created_at"),
                 "updated_at": site.get("updated_at"),
@@ -293,6 +293,20 @@ class NetlifySyncService:
         self._post(f"/sites/{site_id}/unlock")
         return {"id": site_id, "locked": False}
 
+    def delete_site(self, site_id: str):
+        """Permanently delete a site. Netlify's equivalent of Render's
+        delete_service - same DELETE-by-id shape."""
+        response = requests.delete(
+            f"{NETLIFY_BASE_URL}/sites/{site_id}",
+            headers=self.headers,
+            timeout=20,
+        )
+        if response.status_code not in (200, 204):
+            raise Exception(
+                f"Netlify delete failed ({response.status_code}): {response.text[:200]}"
+            )
+        return {"id": site_id, "deleted": True}
+
     def list_accounts(self):
         """
         Teams/accounts this token can create sites under - needed up
@@ -318,15 +332,28 @@ class NetlifySyncService:
         repo.env fields in favor of POST /accounts/{account_id}/env, which
         is a distinct call scoped by ?site_id=.
         """
+        repo_details = {
+            "provider": payload.get("repo_provider") or "github",
+            "repo": payload["repo"],
+            "branch": payload.get("branch") or "main",
+            "cmd": payload.get("build_command") or "",
+            "dir": payload.get("publish_dir") or "",
+        }
+        # Netlify will accept the create-site call without these and
+        # return 200 with no error, but the repo never actually gets
+        # linked - the site is created "blank" with nothing to build or
+        # deploy. `id` (the repo's numeric id) and `installation_id`
+        # (the Netlify GitHub App installation on that account) are what
+        # make the link real; both only exist once the user has
+        # installed/authorized Netlify's GitHub App on the repo already.
+        if payload.get("repo_id"):
+            repo_details["id"] = payload["repo_id"]
+        if payload.get("installation_id"):
+            repo_details["installation_id"] = payload["installation_id"]
+
         body = {
             "name": payload.get("name") or None,
-            "repo": {
-                "provider": payload.get("repo_provider") or "github",
-                "repo": payload["repo"],
-                "branch": payload.get("branch") or "main",
-                "cmd": payload.get("build_command") or "",
-                "dir": payload.get("publish_dir") or "",
-            },
+            "repo": repo_details,
         }
 
         account_slug = payload.get("account_slug")

@@ -157,6 +157,7 @@ class RenderSyncService:
             service_details["region"] = payload.get("region") or "oregon"
             service_details["plan"] = payload.get("plan") or "starter"
             service_details["numInstances"] = int(payload.get("num_instances") or 1)
+            service_details["runtime"] = runtime
 
             if runtime == "image":
                 service_details["image"] = {"imagePath": payload.get("image_url")}

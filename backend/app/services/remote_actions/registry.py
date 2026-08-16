@@ -145,6 +145,13 @@ ACTIONS = {
         "resource_type": "site",
         "requires": [],
     },
+    ("netlify", "delete"): {
+        "label": "Delete site",
+        "consequence": "Permanently deletes this site and its deploy history. Cannot be undone.",
+        "risk_tier": "high",
+        "resource_type": "site",
+        "requires": [],
+    },
 }
 
 

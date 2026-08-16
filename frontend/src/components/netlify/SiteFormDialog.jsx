@@ -19,6 +19,8 @@ const EMPTY_FORM = {
   publish_dir: '',
   account_slug: '',
   account_id: '',
+  repo_id: '',
+  installation_id: '',
   env_vars: [EMPTY_ENV_ROW],
 }
 
@@ -93,6 +95,8 @@ export function SiteFormDialog({ integrationId, onClose, onSaved }) {
       publish_dir: form.publish_dir || null,
       account_slug: form.account_slug || null,
       account_id: form.account_id || null,
+      repo_id: form.repo_id ? Number(form.repo_id) : null,
+      installation_id: form.installation_id ? Number(form.installation_id) : null,
       env_vars: cleanEnvVars(form.env_vars),
     }
 
@@ -173,6 +177,30 @@ export function SiteFormDialog({ integrationId, onClose, onSaved }) {
                 <input className={inputClass} value={form.publish_dir} onChange={set('publish_dir')} placeholder="dist" />
               </Field>
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Repo ID (optional)">
+                <input
+                  className={inputClass}
+                  value={form.repo_id}
+                  onChange={set('repo_id')}
+                  placeholder="e.g. 123456789"
+                />
+              </Field>
+              <Field label="Installation ID (optional)">
+                <input
+                  className={inputClass}
+                  value={form.installation_id}
+                  onChange={set('installation_id')}
+                  placeholder="e.g. 987654"
+                />
+              </Field>
+            </div>
+            <p className="-mt-2 text-[11px] text-text-faint">
+              Leave these blank and the site will be created but not linked to the repo yet -
+              you'll need to connect it from the Netlify dashboard afterward. Fill them in
+              (from GitHub's API or Netlify's installed-apps settings) to link it automatically.
+            </p>
 
             <EnvVarsField
               rows={form.env_vars}

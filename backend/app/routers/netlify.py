@@ -49,6 +49,8 @@ class CreateSiteRequest(BaseModel):
     publish_dir: Optional[str] = None
     account_slug: Optional[str] = None
     account_id: Optional[str] = None
+    repo_id: Optional[int] = None
+    installation_id: Optional[int] = None
     env_vars: Optional[List[EnvVarItem]] = None
 
     @field_validator("env_vars")
